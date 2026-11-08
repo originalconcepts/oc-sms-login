@@ -1,0 +1,94 @@
+/* OC SMS Login: the phone popup and the inline sign-in. */
+:root {
+	--ocsl-brand: #1f2937;
+	--ocsl-ink: #1f2937;
+	--ocsl-muted: #6b7280;
+	--ocsl-line: #d1d5db;
+	--ocsl-bg: #fff;
+	--ocsl-err: #b42318;
+	--ocsl-radius: 14px;
+}
+
+html.ocsl-open { overflow: hidden; }
+
+.ocsl-modal[hidden], .ocsl-step[hidden], .ocsl-err[hidden], .ocsl-test[hidden], [data-ocsl-resend][hidden] { display: none !important; }
+
+.ocsl-modal { position: fixed; inset: 0; z-index: 100000; display: flex; align-items: center; justify-content: center; padding: 16px; direction: rtl; }
+.ocsl-backdrop { position: absolute; inset: 0; background: rgba(17, 24, 39, .55); }
+.ocsl-dialog { position: relative; width: 100%; max-width: 420px; max-height: calc(100vh - 32px); overflow: auto; background: var(--ocsl-bg); color: var(--ocsl-ink); border-radius: var(--ocsl-radius); box-shadow: 0 24px 60px rgba(0, 0, 0, .25); padding: 32px 28px 24px; box-sizing: border-box; animation: ocsl-in .18s ease-out; }
+@keyframes ocsl-in { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .ocsl-dialog { animation: none; } }
+
+/* Themes style every <button>: the close button and the text links must not look like the theme's buttons. */
+.ocsl-modal button.ocsl-x, .ocsl-steps button.ocsl-link, .ocsl-modal button.ocsl-link {
+	background: transparent !important; border: 0 !important; box-shadow: none !important; min-width: 0 !important; min-height: 0 !important;
+	text-transform: none !important; letter-spacing: normal !important; font-weight: 400 !important; border-radius: 0; width: auto; height: auto; line-height: inherit;
+}
+.ocsl-modal button.ocsl-x { position: absolute; top: 10px; left: 10px; width: 36px !important; height: 36px !important; padding: 0 !important; color: var(--ocsl-muted) !important; font-size: 26px !important; line-height: 1 !important; cursor: pointer; border-radius: 50% !important; }
+.ocsl-modal button.ocsl-x:hover, .ocsl-modal button.ocsl-x:focus-visible { background: #f3f4f6 !important; color: var(--ocsl-ink) !important; }
+.ocsl-steps button.ocsl-link, .ocsl-modal button.ocsl-link { padding: 0 !important; color: var(--ocsl-brand) !important; }
+
+.ocsl-steps { direction: rtl; text-align: right; }
+/* Themes size h2 for page titles: keep ours a dialog heading wherever it lands (the theme's login drawer included). */
+.ocsl-steps .ocsl-h { margin: 0 0 6px !important; font-size: 21px !important; line-height: 1.3 !important; font-weight: 700; color: var(--ocsl-ink); padding: 0 0 0 36px; text-align: right; }
+.ocsl-sub { margin: 0 0 18px; font-size: 14.5px; line-height: 1.5; color: var(--ocsl-muted); }
+.ocsl-label { display: block; margin: 0 0 6px; font-size: 13.5px; font-weight: 600; color: var(--ocsl-ink); }
+.ocsl-steps p { margin: 0 0 12px; }
+
+.ocsl-input { display: block; width: 100%; box-sizing: border-box; height: 48px; padding: 0 14px; font: inherit; font-size: 16px; color: var(--ocsl-ink); background: #fff; border: 1.5px solid var(--ocsl-line); border-radius: 10px; outline: none; }
+.ocsl-input:focus { border-color: var(--ocsl-brand); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ocsl-brand) 18%, transparent); }
+.ocsl-tel { letter-spacing: .5px; text-align: left; }
+
+.ocsl-row { display: flex; gap: 8px; }
+.ocsl-row .ocsl-input { flex: 1 1 auto; min-width: 0; }
+.ocsl-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; }
+
+.ocsl-btn { flex: 0 0 auto; height: 48px; padding: 0 20px; border: 0; border-radius: 10px; background: var(--ocsl-brand); color: #fff; font: inherit; font-size: 16px; font-weight: 700; cursor: pointer; white-space: nowrap; transition: filter .15s; }
+.ocsl-btn:hover { filter: brightness(1.08); }
+.ocsl-btn:focus-visible { outline: 3px solid color-mix(in srgb, var(--ocsl-brand) 40%, transparent); outline-offset: 2px; }
+.ocsl-btn[disabled] { opacity: .65; cursor: progress; }
+.ocsl-btn-wide { display: block; width: 100%; margin-top: 6px; }
+
+.ocsl-link { border: 0; background: none; padding: 0; color: var(--ocsl-brand); font: inherit; font-size: 14px; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.ocsl-sub .ocsl-link { margin-inline-start: 6px; }
+.ocsl-pretty { font-weight: 700; color: var(--ocsl-ink); }
+
+.ocsl-err { margin: 10px 0 0 !important; padding: 10px 12px; border-radius: 8px; background: #fef3f2; color: var(--ocsl-err); font-size: 14px; line-height: 1.45; }
+.ocsl-test { padding: 8px 12px; border-radius: 8px; background: #fffbeb; border: 1px dashed #d97706; color: #92400e; font-size: 14px; font-weight: 700; }
+
+.ocsl-boxes { display: flex; gap: 8px; justify-content: center; margin: 4px 0 16px; direction: ltr; }
+.ocsl-box { width: 48px; height: 56px; box-sizing: border-box; text-align: center; font: inherit; font-size: 24px; font-weight: 700; color: var(--ocsl-ink); border: 1.5px solid var(--ocsl-line); border-radius: 10px; outline: none; background: #fff; padding: 0; }
+.ocsl-box:focus { border-color: var(--ocsl-brand); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ocsl-brand) 18%, transparent); }
+
+.ocsl-resend { text-align: center; font-size: 13.5px; color: var(--ocsl-muted); margin: 14px 0 0 !important; }
+.ocsl-back, .ocsl-guest { text-align: center; margin: 14px 0 0 !important; }
+
+.ocsl-consent { display: flex; gap: 8px; align-items: flex-start; margin: 4px 0 12px; font-size: 13.5px; line-height: 1.45; color: var(--ocsl-muted); cursor: pointer; }
+.ocsl-consent input { margin-top: 3px; flex: 0 0 auto; width: 18px; height: 18px; accent-color: var(--ocsl-brand); }
+.ocsl-consent a { color: var(--ocsl-brand); }
+.ocsl-hp { position: absolute !important; left: -9999px !important; width: 1px; height: 1px; overflow: hidden; }
+
+.ocsl-done { text-align: center; padding: 24px 0 8px; }
+.ocsl-done .ocsl-h { padding: 0; margin-top: 14px; }
+.ocsl-spin { display: inline-block; width: 36px; height: 36px; border: 3px solid #e5e7eb; border-top-color: var(--ocsl-brand); border-radius: 50%; animation: ocsl-spin .8s linear infinite; }
+@keyframes ocsl-spin { to { transform: rotate(360deg); } }
+
+/* Inline (My Account, the shortcode) */
+.ocsl-inline { max-width: 460px; margin: 0 0 28px; padding: 24px; border: 1px solid #e5e7eb; border-radius: var(--ocsl-radius); background: #fff; box-sizing: border-box; }
+.ocsl-inline .ocsl-steps .ocsl-h { padding: 0; font-size: 19px !important; }
+.ocsl-or { display: flex; align-items: center; gap: 12px; margin: 22px 0 0 !important; color: var(--ocsl-muted); font-size: 13.5px; }
+.ocsl-or::before, .ocsl-or::after { content: ""; flex: 1 1 auto; height: 1px; background: #e5e7eb; }
+
+/* The checkout behind the gate: nothing to fill until signed in. */
+body.ocsl-gated-required form.checkout { filter: blur(2px); pointer-events: none; user-select: none; }
+
+/* Phones: a sheet from the bottom. */
+@media (max-width: 600px) {
+	.ocsl-modal { align-items: flex-end; padding: 0; }
+	.ocsl-dialog { max-width: none; border-radius: 18px 18px 0 0; padding: 28px 18px calc(18px + env(safe-area-inset-bottom)); max-height: 92vh; animation-name: ocsl-up; }
+	@keyframes ocsl-up { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+	.ocsl-row { flex-direction: column; }
+	.ocsl-btn { width: 100%; }
+	.ocsl-box { width: 44px; height: 52px; font-size: 22px; }
+	.ocsl-grid { grid-template-columns: 1fr; }
+}
