@@ -287,7 +287,8 @@ class OCSL_Admin {
 		$out   = array();
 		foreach ( $packs as $p ) {
 			$messages = isset( $p['messages'] ) ? (int) $p['messages'] : ( isset( $p['credits'] ) ? (int) $p['credits'] : 0 );
-			$price    = isset( $p['price'] ) ? (float) preg_replace( '/[^0-9.]/', '', (string) $p['price'] ) : 0;
+			// The hub's 'price' is a display string with VAT; 'price_ex' is the number before VAT this screen adds VAT to.
+			$price = isset( $p['price_ex'] ) ? (float) $p['price_ex'] : ( isset( $p['price'] ) ? (float) preg_replace( '/[^0-9.]/', '', (string) $p['price'] ) : 0 );
 			if ( $messages <= 0 || $price <= 0 ) {
 				continue;
 			}

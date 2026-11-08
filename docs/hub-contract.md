@@ -1,7 +1,7 @@
 # OC SMS Login ↔ OC Pluginz hub: the contract
 
-Status: **proposed** (2026-11-08). The plugin side is built; the hub side is still to be built (on
-`originalconcepts/ocpluginz-hub`, branch + PR, deployed only with the owner's approval).
+Status: **built** (2026-11-08). Plugin side: this repo. Hub side: `originalconcepts/ocpluginz-hub`, branch
+`feature/sms-relay` (hub-store 0.4.22, `OCPZS_Sms`), deployed only with the owner's approval.
 
 ## The business model (the owner, 2026-11-08)
 
@@ -37,14 +37,17 @@ zero-price plan, or one granted by the agency). For `oc-sms-login` the entitleme
   "unit": "messages",
   "balance": 9412,
   "packs": [
-    {"key": "sms2500", "messages": 2500, "price": "199", "url": "https://my.ocpluginz.com/checkout/?add-to-cart=NNN"},
+    {"key": "sms2500", "messages": 2500, "price": "₪234.82", "price_ex": 199, "url": "https://my.ocpluginz.com/checkout/?add-to-cart=NNN"},
     …
   ],
   "buy_url": "https://ocpluginz.com/oc-sms-login.html#credits"
 }
 ```
 
-The plugin shows the hub's `packs` when present and falls back to the table above (without buy links).
+`price` is the hub's display string **with** VAT; `price_ex` is the number before VAT, which the plugin
+shows (and adds VAT to). The plugin shows the hub's `packs` when present and falls back to the table
+above (without buy links). The licence is the free plan `free`: a ₪0 Woo product, or opened by the first
+pack bought on an account that has none (the key is mailed then).
 
 ## The endpoints (base `https://my.ocpluginz.com/wp-json/ocpz/v1`)
 
@@ -64,7 +67,8 @@ fields every OC plugin sends (`key`, `product`, `domain`, …). The usual refusa
   UCS-2: 70 a single message, 67 per part. The plugin's default text is one segment.
 - `sender`: `[A-Za-z0-9 ]{1,11}`, else 400 `ocpzs_sender`. The hub may pin a sender per licence
   (an agency override), in which case it uses its own and ignores this field.
-- `purpose`: `login` (the only one for now).
+- `purpose`: `login` (the only one for now). The text must carry the code (a run of 4 to 8 digits), so the
+  bank cannot be used as a marketing channel.
 
 The hub charges the segments from the bank **atomically before sending**, calls ActiveTrail
 `POST https://webapi.mymarketing.co.il/api/smscampaign/OperationalMessage` with its own key
@@ -87,7 +91,10 @@ Usage: `OCPZ_Ledger::track_usage` with `messages` += segments.
 
 - **ActiveTrail key:** encrypted, `ocpzs_sms_activetrail_key`; `OCPZS_ACTIVETRAIL_KEY` in wp-config wins.
 - **Adding or removing messages** on a licence: the shared bank form, labelled "הודעות".
-- **Sender override** per licence (optional).
+- **Sender override** per licence: the `ocpzs_sms_sender` filter (no screen yet).
+- A **test message** form (on OC Pluginz' own account) and a button that creates the missing Woo products
+  (the free plan and the six packs: published, hidden from the catalogue, prices before VAT).
+- No key: `503 ocpzs_sms_unconfigured`, nothing charged, and the shop owner gets a mail once a day.
 
 ## The plugin's other ways out (no hub involved)
 
