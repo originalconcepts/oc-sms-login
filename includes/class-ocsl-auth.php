@@ -88,8 +88,11 @@ class OCSL_Auth {
 		if ( get_transient( 'ocsl_cool_' . $phone ) ) {
 			return 'הקוד נשלח הרגע. חכו כמה שניות לפני שמבקשים שוב.';
 		}
-		$per_phone = (int) get_transient( 'ocsl_ph_' . $phone );
-		$per_ip    = (int) get_transient( 'ocsl_ip_' . md5( self::ip() ) );
+		if ( 'test' === OCSL_Sender::transport() ) {
+			return ''; // No message leaves the site and the code is on screen: the caps would only block testing.
+		}
+		$per_phone = self::counted( 'ocsl_ph_' . $phone );
+		$per_ip    = self::counted( 'ocsl_ip_' . md5( self::ip() ) );
 		if ( $per_phone >= (int) OCSL_Settings::get( 'phone_hourly' ) || $per_ip >= (int) OCSL_Settings::get( 'ip_hourly' ) ) {
 			return 'יותר מדי ניסיונות. נסו שוב בעוד שעה בערך.';
 		}
@@ -128,14 +131,47 @@ class OCSL_Auth {
 	 * @param string $phone Canonical number.
 	 */
 	private static function note_send( $phone ) {
+		set_transient( 'ocsl_cool_' . $phone, 1, (int) OCSL_Settings::get( 'resend_cooldown' ) );
+		if ( 'test' === OCSL_Sender::transport() ) {
+			return; // Test codes are not messages: they count toward no cap.
+		}
+
 		$day = self::day();
 		++$day['n'];
 		update_option( 'ocsl_day', $day, false );
 
-		set_transient( 'ocsl_cool_' . $phone, 1, (int) OCSL_Settings::get( 'resend_cooldown' ) );
-		set_transient( 'ocsl_ph_' . $phone, ( (int) get_transient( 'ocsl_ph_' . $phone ) ) + 1, HOUR_IN_SECONDS );
-		$ipk = 'ocsl_ip_' . md5( self::ip() );
-		set_transient( $ipk, ( (int) get_transient( $ipk ) ) + 1, HOUR_IN_SECONDS );
+		self::bump( 'ocsl_ph_' . $phone );
+		self::bump( 'ocsl_ip_' . md5( self::ip() ) );
+	}
+
+	/**
+	 * Sends counted under this key in its current hour.
+	 *
+	 * @param string $key Transient name.
+	 * @return int
+	 */
+	private static function counted( $key ) {
+		$v = get_transient( $key );
+		return is_array( $v ) ? (int) $v['n'] : (int) $v;
+	}
+
+	/**
+	 * Count one more send. The hour starts at the first send and does not move with later ones,
+	 * so a blocked number opens again an hour after its first code, not after its last.
+	 *
+	 * @param string $key Transient name.
+	 */
+	private static function bump( $key ) {
+		$now = time();
+		$v   = get_transient( $key );
+		if ( ! is_array( $v ) || empty( $v['until'] ) || (int) $v['until'] <= $now ) {
+			$v = array(
+				'n'     => 0,
+				'until' => $now + HOUR_IN_SECONDS,
+			);
+		}
+		++$v['n'];
+		set_transient( $key, $v, max( 1, (int) $v['until'] - $now ) );
 	}
 
 	/* ---------------- The code ---------------- */

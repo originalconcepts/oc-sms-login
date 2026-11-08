@@ -39,6 +39,21 @@
 		try { return sessionStorage.getItem(GUEST_KEY) === '1'; } catch (e) { return false; }
 	}
 
+	/*
+	 * A code already on its way, kept for this tab: when the visitor closes the popup, or moves on
+	 * to the checkout before typing the code, the next sign-in box opens at the code, not the phone.
+	 */
+	var FLOW_KEY = 'ocsl_flow';
+	function flowGet() {
+		try { var f = JSON.parse(sessionStorage.getItem(FLOW_KEY) || 'null'); return f && f.phone ? f : null; } catch (e) { return null; }
+	}
+	function flowSet(f) {
+		try { sessionStorage.setItem(FLOW_KEY, JSON.stringify(f)); } catch (e) {}
+	}
+	function flowClear() {
+		try { sessionStorage.removeItem(FLOW_KEY); } catch (e) {}
+	}
+
 	/* ---------------- one sign-in box (the popup's, or an inline block) ---------------- */
 
 	function Box(root) {
@@ -93,25 +108,50 @@
 			return;
 		}
 		if (data.step === 'code') {
-			q('.ocsl-pretty', this.root).textContent = data.pretty || '';
-			var test = q('.ocsl-test', this.root);
-			if (test) {
-				test.hidden = !data.test_code;
-				test.textContent = data.test_code ? fmt(T.testCode, data.test_code) : '';
-			}
-			qa('.ocsl-box', this.root).forEach(function (b) { b.value = ''; });
-			this.step('code');
-			this.countdown(data.wait || 60);
-			this.webOtp();
+			var now = Date.now(), wait = data.wait || 60;
+			flowSet({
+				phone: this.phone,
+				pretty: data.pretty || '',
+				test: data.test_code || '',
+				until: now + (D.expiry || 300) * 1000,
+				resendAt: now + wait * 1000
+			});
+			this.showCode(data.pretty, data.test_code, wait);
 			return;
 		}
 		if (data.step === 'done') {
+			flowClear();
 			this.step('done');
 			var to = data.to || this.to;
 			setTimeout(function () {
 				if (to && !samePage(to, location.href)) { location.href = to; } else { location.reload(); }
 			}, 400);
 		}
+	};
+
+	Box.prototype.showCode = function (pretty, testCode, wait) {
+		q('.ocsl-pretty', this.root).textContent = pretty || '';
+		var test = q('.ocsl-test', this.root);
+		if (test) {
+			test.hidden = !testCode;
+			test.textContent = testCode ? fmt(T.testCode, testCode) : '';
+		}
+		qa('.ocsl-box', this.root).forEach(function (b) { b.value = ''; });
+		this.step('code');
+		if (wait > 0) { this.countdown(wait); } else { this.resendReady(); }
+		this.webOtp();
+	};
+
+	/** Open at the code when one is still on its way to this visitor; the phone is filled in either way. */
+	Box.prototype.resume = function () {
+		var f = flowGet();
+		if (!f) { return false; }
+		var input = q('[data-ocsl-step="phone"] input[name=phone]', this.root);
+		if (input && !input.value) { input.value = f.phone; }
+		if (Date.now() >= f.until) { return false; }
+		this.phone = f.phone;
+		this.showCode(f.pretty, f.test, Math.ceil((f.resendAt - Date.now()) / 1000));
+		return true;
 	};
 
 	Box.prototype.countdown = function (secs) {
@@ -137,6 +177,7 @@
 	/** Android Chrome can read the code from the SMS by itself. */
 	Box.prototype.webOtp = function () {
 		if (!('OTPCredential' in window) || !navigator.credentials) { return; }
+		if (this.abort) { this.abort.abort(); }
 		var self = this, ac = new AbortController();
 		this.abort = ac;
 		navigator.credentials.get({ otp: { transport: ['sms'] }, signal: ac.signal }).then(function (otp) {
@@ -208,6 +249,7 @@
 			b.addEventListener('click', function () {
 				clearInterval(self.timer);
 				if (self.abort) { self.abort.abort(); }
+				flowClear();
 				self.step('phone');
 			});
 		});
@@ -257,7 +299,7 @@
 		lastFocus = document.activeElement;
 		modal.hidden = false;
 		document.documentElement.classList.add('ocsl-open');
-		popupBox.step('phone');
+		if (!popupBox.resume()) { popupBox.step('phone'); }
 		return true;
 	}
 
@@ -342,7 +384,7 @@
 
 	qa('[data-ocsl-inline]').forEach(function (el) {
 		var b = new Box(el);
-		b.step('phone');
+		if (!b.resume()) { b.step('phone'); }
 	});
 
 	window.ocslOpen = openPopup;

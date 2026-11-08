@@ -109,6 +109,7 @@ class OCSL_Gate {
 				'onCheckout' => self::on_checkout() && 'off' !== self::mode(),
 				'selectors' => $selectors,
 				'test'      => 'test' === OCSL_Sender::transport(),
+				'expiry'    => (int) OCSL_Settings::get( 'code_expiry' ),
 				'i18n'      => array(
 					'sending'   => 'שולחים...',
 					'checking'  => 'בודקים...',
@@ -183,6 +184,7 @@ class OCSL_Gate {
 				'onCheckout' => false,
 				'selectors'  => '',
 				'test'       => 'test' === OCSL_Sender::transport(),
+				'expiry'     => (int) OCSL_Settings::get( 'code_expiry' ),
 				'i18n'       => array(
 					'sending'  => 'שולחים...',
 					'checking' => 'בודקים...',
@@ -204,7 +206,8 @@ class OCSL_Gate {
 		$locked = 'required' === self::mode();
 		?>
 		<div class="ocsl-modal" id="ocsl-modal" hidden data-ocsl-modal<?php echo $locked ? ' data-ocsl-locked' : ''; ?>>
-			<div class="ocsl-backdrop" data-ocsl-close></div>
+			<?php // Required: a stray click beside the box must not throw the typed number away. ?>
+			<div class="ocsl-backdrop"<?php echo $locked ? '' : ' data-ocsl-close'; ?>></div>
 			<div class="ocsl-dialog" role="dialog" aria-modal="true" aria-labelledby="ocsl-title" data-ocsl-to="">
 				<button type="button" class="ocsl-x" data-ocsl-close aria-label="סגירה">&times;</button>
 				<?php self::steps( true ); ?>
