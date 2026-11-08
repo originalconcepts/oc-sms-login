@@ -362,6 +362,14 @@ class OCSL_Auth {
 		self::fill_from_last_order( $user_id, $phone );
 		self::sign_in( $user_id );
 
+		/**
+		 * A shopper proved this phone with a code and is signed in.
+		 *
+		 * @param int    $user_id The account.
+		 * @param string $phone   The verified number, 05XXXXXXXX.
+		 */
+		do_action( 'ocsl_phone_verified', $user_id, $phone );
+
 		wp_send_json_success(
 			array(
 				'step' => 'done',

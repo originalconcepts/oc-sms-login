@@ -58,6 +58,7 @@ includes/class-ocsl-phone.php    canonical number, its stored spellings, its acc
 includes/class-ocsl-sender.php   hub | direct | test, the message, the send log
 includes/class-ocsl-auth.php     the AJAX steps: start, register, verify, resend
 includes/class-ocsl-gate.php     the popup, the checkout gate, the My Account block, the shortcode
+includes/class-ocsl-integrations.php  the verified phone for other plugins (OC ValueCard: no second code)
 includes/class-ocsl-admin.php    settings, SMS packs, send log (under the OC Pluginz menu)
 includes/hub/                    the OC Pluginz licence client (from OC Popup), notices, updater, account screen
 oc-pluginz/                      the suite's shared admin menu (canonical copy in ocpluginz-hub/lib)

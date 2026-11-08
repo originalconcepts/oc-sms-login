@@ -35,6 +35,7 @@ require_once __DIR__ . '/includes/class-ocsl-phone.php';
 require_once __DIR__ . '/includes/class-ocsl-sender.php';
 require_once __DIR__ . '/includes/class-ocsl-auth.php';
 require_once __DIR__ . '/includes/class-ocsl-gate.php';
+require_once __DIR__ . '/includes/class-ocsl-integrations.php';
 require_once __DIR__ . '/includes/class-ocsl-admin.php';
 
 /**
@@ -70,6 +71,7 @@ add_action(
 		}
 		OCSL_Auth::boot();
 		OCSL_Gate::boot();
+		OCSL_Integrations::boot();
 	},
 	20
 );
