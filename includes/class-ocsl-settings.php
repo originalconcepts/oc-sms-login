@@ -41,6 +41,7 @@ class OCSL_Settings {
 			'ip_hourly'       => 10,
 			'daily_cap'       => 500,
 			'low_balance'     => 200,
+			'alert_email'     => '', // '' = the site's admin address (OCSL_Alerts)
 
 			// Returning customers who ordered as guests: their next sign-in opens an
 			// account from their last order, so the checkout arrives filled in.
@@ -148,6 +149,10 @@ class OCSL_Settings {
 				$v         = sanitize_text_field( wp_unslash( $in[ $k ] ) );
 				$out[ $k ] = '' === $v ? $def[ $k ] : $v;
 			}
+		}
+		if ( isset( $in['alert_email'] ) ) {
+			$e                  = sanitize_email( wp_unslash( $in['alert_email'] ) );
+			$out['alert_email'] = is_email( $e ) ? $e : '';
 		}
 		if ( isset( $in['brand_color'] ) ) {
 			$c                  = sanitize_hex_color( wp_unslash( $in['brand_color'] ) );

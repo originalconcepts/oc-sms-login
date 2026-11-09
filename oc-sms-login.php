@@ -36,6 +36,7 @@ require_once __DIR__ . '/includes/class-ocsl-sender.php';
 require_once __DIR__ . '/includes/class-ocsl-auth.php';
 require_once __DIR__ . '/includes/class-ocsl-gate.php';
 require_once __DIR__ . '/includes/class-ocsl-integrations.php';
+require_once __DIR__ . '/includes/class-ocsl-alerts.php';
 require_once __DIR__ . '/includes/class-ocsl-admin.php';
 
 /**
@@ -59,6 +60,7 @@ add_action(
 		OCSL_Hub_Updater::boot();
 		OCSL_Hub_Admin::boot();
 		OCSL_Admin::boot();
+		OCSL_Alerts::boot();
 
 		if ( ! class_exists( 'WooCommerce' ) ) {
 			add_action(

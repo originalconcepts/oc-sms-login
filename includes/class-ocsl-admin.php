@@ -247,7 +247,7 @@ class OCSL_Admin {
 						'phone_hourly'    => array( 'קודים למספר בשעה', '' ),
 						'ip_hourly'       => array( 'קודים לכתובת IP בשעה', '' ),
 						'daily_cap'       => array( 'תקרה יומית לכל האתר', 'בהגעה לתקרה השליחה נעצרת עד חצות ונשלח מייל למנהל האתר.' ),
-						'low_balance'     => array( 'התראה על יתרה נמוכה מתחת ל-', '' ),
+						'low_balance'     => array( 'התראה על יתרה נמוכה מתחת ל-', 'הודעות. מתחת לזה מופיעה אזהרה במסכי התוסף ונשלח מייל אחד. 0 = בלי התראה.' ),
 					);
 					foreach ( $nums as $k => $meta ) :
 						?>
@@ -257,6 +257,11 @@ class OCSL_Admin {
 								<?php if ( '' !== $meta[1] ) : ?><span class="description"><?php echo esc_html( $meta[1] ); ?></span><?php endif; ?></td>
 						</tr>
 					<?php endforeach; ?>
+					<tr>
+						<th scope="row"><label for="ocsl-alert_email">מייל להתראות על היתרה</label></th>
+						<td><input id="ocsl-alert_email" type="email" dir="ltr" class="regular-text" name="<?php echo esc_attr( $f( 'alert_email' ) ); ?>" value="<?php echo esc_attr( (string) $s['alert_email'] ); ?>" placeholder="<?php echo esc_attr( (string) get_option( 'admin_email' ) ); ?>">
+							<p class="description">ריק = מייל מנהל האתר. מייל אחד כשהיתרה יורדת מתחת לסף, ועוד אחד אם היא נגמרת.</p></td>
+					</tr>
 				</table>
 
 				<?php submit_button( 'שמירה' ); ?>

@@ -11,7 +11,7 @@ if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
 	exit;
 }
 
-foreach ( array( 'ocsl_settings', 'ocsl_hub', 'ocsl_log', 'ocsl_day' ) as $option ) {
+foreach ( array( 'ocsl_settings', 'ocsl_hub', 'ocsl_log', 'ocsl_day', 'ocsl_alert' ) as $option ) {
 	delete_option( $option );
 }
 wp_clear_scheduled_hook( 'ocsl_hub_refresh' );
