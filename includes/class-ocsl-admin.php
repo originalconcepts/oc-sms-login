@@ -37,6 +37,7 @@ class OCSL_Admin {
 		add_action( 'init', array( __CLASS__, 'register_with_suite' ), 20 );
 		add_action( 'admin_post_ocsl_save', array( __CLASS__, 'save' ) );
 		add_action( 'admin_post_ocsl_balance', array( __CLASS__, 'refresh_balance' ) );
+		add_action( 'admin_enqueue_scripts', array( __CLASS__, 'admin_assets' ) );
 		add_filter( 'plugin_action_links_' . OCSL_BASENAME, array( __CLASS__, 'action_link' ) );
 	}
 
@@ -230,10 +231,83 @@ class OCSL_Admin {
 							<td><input id="ocsl-<?php echo esc_attr( $k ); ?>" class="large-text" name="<?php echo esc_attr( $f( $k ) ); ?>" value="<?php echo esc_attr( $s[ $k ] ); ?>"></td>
 						</tr>
 					<?php endforeach; ?>
-					<tr>
-						<th scope="row"><label for="ocsl-color">צבע הכפתורים</label></th>
-						<td><input id="ocsl-color" type="text" dir="ltr" class="small-text code" name="<?php echo esc_attr( $f( 'brand_color' ) ); ?>" value="<?php echo esc_attr( $s['brand_color'] ); ?>" placeholder="#1f2937"> <span class="description">קוד צבע, למשל <code>#F15D2A</code>. ריק = אפור כהה.</span></td>
-					</tr>
+				</table>
+
+				<h2>עיצוב החלון</h2>
+				<p class="description">הצבעים, הפינות והכפתורים של חלון הכניסה, של הכניסה בעמוד החשבון ושל חלון ההתחברות בכותרת. השינויים מופיעים מיד בתצוגה המקדימה.</p>
+				<div class="ocsl-design">
+					<table class="form-table" role="presentation">
+						<?php
+						$colors = array(
+							'brand_color'    => array( 'צבע ראשי (כפתורים וקישורים)', '#1f2937', '--ocsl-brand' ),
+							'btn_text_color' => array( 'צבע הטקסט בכפתור', '#ffffff', '--ocsl-btn-ink' ),
+							'popup_bg'       => array( 'רקע החלון', '#ffffff', '--ocsl-bg' ),
+							'text_color'     => array( 'צבע הטקסט', '#1f2937', '--ocsl-ink' ),
+						);
+						foreach ( $colors as $k => $meta ) :
+							?>
+							<tr>
+								<th scope="row"><label for="ocsl-<?php echo esc_attr( $k ); ?>"><?php echo esc_html( $meta[0] ); ?></label></th>
+								<td><input id="ocsl-<?php echo esc_attr( $k ); ?>" type="text" dir="ltr" class="ocsl-color" data-default-color="<?php echo esc_attr( $meta[1] ); ?>" data-var="<?php echo esc_attr( $meta[2] ); ?>" name="<?php echo esc_attr( $f( $k ) ); ?>" value="<?php echo esc_attr( $s[ $k ] ); ?>"></td>
+							</tr>
+						<?php endforeach; ?>
+						<tr>
+							<th scope="row"><label for="ocsl-radius">עיגול פינות החלון</label></th>
+							<td><input id="ocsl-radius" type="range" min="0" max="28" step="1" name="<?php echo esc_attr( $f( 'radius' ) ); ?>" value="<?php echo esc_attr( (string) $s['radius'] ); ?>"> <output for="ocsl-radius"><?php echo esc_html( (string) $s['radius'] ); ?></output> px</td>
+						</tr>
+						<tr>
+							<th scope="row">צורת הכפתורים והשדות</th>
+							<td>
+								<?php foreach ( array( 'soft' => 'מעוגלים קלות', 'round' => 'עגולים', 'square' => 'ישרים' ) as $v => $label ) : ?>
+									<label style="margin-inline-end:16px"><input type="radio" class="ocsl-shape" name="<?php echo esc_attr( $f( 'btn_shape' ) ); ?>" value="<?php echo esc_attr( $v ); ?>" <?php checked( $s['btn_shape'], $v ); ?>> <?php echo esc_html( $label ); ?></label>
+								<?php endforeach; ?>
+							</td>
+						</tr>
+						<tr>
+							<th scope="row"><label for="ocsl-overlay">הכהיית הדף מאחורי החלון</label></th>
+							<td><input id="ocsl-overlay" type="range" min="0" max="90" step="5" name="<?php echo esc_attr( $f( 'overlay' ) ); ?>" value="<?php echo esc_attr( (string) $s['overlay'] ); ?>"> <output for="ocsl-overlay"><?php echo esc_html( (string) $s['overlay'] ); ?></output>%</td>
+						</tr>
+					</table>
+					<div class="ocsl-preview-wrap">
+						<p class="description" style="margin:0 0 8px">תצוגה מקדימה</p>
+						<div class="ocsl-preview" id="ocsl-preview" style="<?php echo esc_attr( OCSL_Gate::css_vars( $s ) ); ?>">
+							<div class="ocsl-dialog">
+								<button type="button" class="ocsl-x" aria-label="סגירה" tabindex="-1"></button>
+								<div class="ocsl-steps">
+									<div class="ocsl-step">
+										<h2 class="ocsl-h"><?php echo esc_html( $s['gate_title'] ); ?></h2>
+										<p class="ocsl-sub"><?php echo esc_html( $s['subtitle'] ); ?></p>
+										<span class="ocsl-label">מספר טלפון נייד</span>
+										<div class="ocsl-row">
+											<input class="ocsl-input ocsl-tel" type="tel" placeholder="05X-XXXXXXX" dir="ltr" tabindex="-1">
+											<button type="button" class="ocsl-btn" tabindex="-1">שליחת קוד</button>
+										</div>
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+
+				<h2>חלון ההתחברות בכותרת</h2>
+				<p class="description">כשתבנית האתר פותחת חלון התחברות מהכותרת ("שלום, אורח"), הכניסה עם הטלפון מסודרת בו כמו ב-OC Theme: כותרת, טלפון ושליחת קוד, "או" וכניסה עם מייל וסיסמה, והרשמה בתחתית.</p>
+				<table class="form-table" role="presentation">
+					<?php
+					$drawer = array(
+						'drawer_head'       => 'כותרת עליונה',
+						'drawer_title'      => 'כותרת הכניסה',
+						'drawer_email'      => 'כפתור הכניסה עם מייל',
+						'drawer_join_title' => 'כותרת ההרשמה',
+						'drawer_join_text'  => 'טקסט ההרשמה',
+						'drawer_join_btn'   => 'כפתור ההרשמה',
+					);
+					foreach ( $drawer as $k => $label ) :
+						?>
+						<tr>
+							<th scope="row"><label for="ocsl-<?php echo esc_attr( $k ); ?>"><?php echo esc_html( $label ); ?></label></th>
+							<td><input id="ocsl-<?php echo esc_attr( $k ); ?>" class="large-text" name="<?php echo esc_attr( $f( $k ) ); ?>" value="<?php echo esc_attr( $s[ $k ] ); ?>"></td>
+						</tr>
+					<?php endforeach; ?>
 				</table>
 
 				<h2>הגנות</h2>
@@ -449,6 +523,18 @@ class OCSL_Admin {
 		self::styles();
 	}
 
+	/** The settings screen: WordPress's color picker, and the popup's stylesheet for the live preview. */
+	public static function admin_assets() {
+		if ( ! isset( $_GET['page'] ) || self::SLUG !== $_GET['page'] ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+			return;
+		}
+		wp_enqueue_style( 'wp-color-picker' );
+		wp_enqueue_script( 'wp-color-picker' );
+		$css = plugin_dir_path( OCSL_FILE ) . 'assets/css/ocsl.css';
+		wp_enqueue_style( 'ocsl-preview', plugin_dir_url( OCSL_FILE ) . 'assets/css/ocsl.css', array(), OCSL_VERSION . ( file_exists( $css ) ? '.' . filemtime( $css ) : '' ) );
+		wp_add_inline_script( 'wp-color-picker', 'jQuery(function($){var pv=document.getElementById("ocsl-preview");if(!pv){return;}var set=function(v,val){if(val){pv.style.setProperty(v,val);}else{pv.style.removeProperty(v);}};$(".ocsl-color").each(function(){var $i=$(this),v=$i.data("var");$i.wpColorPicker({change:function(e,ui){set(v,ui.color.toString());},clear:function(){set(v,"");}});});var shapes={soft:["10px","10px"],round:["999px","24px"],square:["0px","0px"]};$(".ocsl-shape").on("change",function(){var s=shapes[this.value]||shapes.soft;set("--ocsl-btn-radius",s[0]);set("--ocsl-field-radius",s[1]);});$("#ocsl-radius").on("input",function(){set("--ocsl-radius",this.value+"px");$(this).next("output").text(this.value);});$("#ocsl-overlay").on("input",function(){set("--ocsl-overlay",this.value/100);$(this).next("output").text(this.value);});});' );
+	}
+
 	private static function styles() {
 		?>
 		<style>
@@ -463,6 +549,10 @@ class OCSL_Admin {
 		.ocsl-buy{max-width:860px;background:#fff;border:1px solid #dcdcde;border-radius:10px;padding:18px 22px}
 		.ocsl-buy h2{display:flex;align-items:center;gap:8px;margin:0 0 6px;font-size:18px}
 		.ocsl-buy h2 .dashicons{color:#5b4dff}
+		.ocsl-design{display:grid;grid-template-columns:minmax(0,1fr) 470px;gap:28px;align-items:start;max-width:1240px}
+		.ocsl-preview-wrap{position:sticky;top:46px}
+		.ocsl-design .form-table th{width:200px}
+		@media (max-width:1180px){.ocsl-design{grid-template-columns:1fr}.ocsl-preview-wrap{position:static}}
 		.ocsl-packs{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:16px 0}
 		.ocsl-pack{position:relative;cursor:pointer;display:block}
 		.ocsl-pack input{position:absolute;opacity:0;pointer-events:none}

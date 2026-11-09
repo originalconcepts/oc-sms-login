@@ -66,7 +66,8 @@ class OCSL_Gate {
 		if ( 'off' !== self::mode() ) {
 			return true; // The side cart's checkout button lives on every page.
 		}
-		return function_exists( 'is_account_page' ) && is_account_page() && OCSL_Settings::get( 'myaccount_form' );
+		// The sign-in block also sits in themes' header login drawers, on every page.
+		return (bool) OCSL_Settings::get( 'myaccount_form' );
 	}
 
 	/** The checkout page itself, before an order exists. */
@@ -91,10 +92,7 @@ class OCSL_Gate {
 		wp_enqueue_style( 'ocsl', $url . 'assets/css/ocsl.css', array(), self::ver( 'assets/css/ocsl.css' ) );
 		wp_enqueue_script( 'ocsl', $url . 'assets/js/ocsl.js', array(), self::ver( 'assets/js/ocsl.js' ), true );
 
-		$brand = (string) OCSL_Settings::get( 'brand_color' );
-		if ( '' !== $brand ) {
-			wp_add_inline_style( 'ocsl', ':root{--ocsl-brand:' . $brand . ';}' );
-		}
+		wp_add_inline_style( 'ocsl', ':root{' . self::css_vars() . '}' );
 
 		$selectors = trim( (string) OCSL_Settings::get( 'open_selectors' ) );
 		wp_localize_script(
@@ -118,8 +116,54 @@ class OCSL_Gate {
 					'resend'    => 'שלחו לי קוד חדש',
 					'signedIn'  => 'נכנסתם! ממשיכים...',
 					'testCode'  => 'מצב בדיקה: הקוד הוא %s',
-				),
+				) + self::drawer_words(),
 			)
+		);
+	}
+
+	/**
+	 * The popup's look from the settings, as CSS variables (also drives the preview in the settings).
+	 *
+	 * @param array|null $s Settings, or the saved ones.
+	 * @return string
+	 */
+	public static function css_vars( $s = null ) {
+		$s      = is_array( $s ) ? $s : OCSL_Settings::all();
+		$shapes = array(
+			'soft'   => array( '10px', '10px' ),
+			'round'  => array( '999px', '24px' ),
+			'square' => array( '0px', '0px' ),
+		);
+		$shape  = isset( $shapes[ $s['btn_shape'] ] ) ? $shapes[ $s['btn_shape'] ] : $shapes['soft'];
+		$vars   = array(
+			'--ocsl-radius'       => (int) $s['radius'] . 'px',
+			'--ocsl-btn-radius'   => $shape[0],
+			'--ocsl-field-radius' => $shape[1],
+			'--ocsl-overlay'      => (string) round( (int) $s['overlay'] / 100, 2 ),
+		);
+		foreach ( array( 'brand_color' => '--ocsl-brand', 'btn_text_color' => '--ocsl-btn-ink', 'popup_bg' => '--ocsl-bg', 'text_color' => '--ocsl-ink' ) as $k => $var ) {
+			if ( '' !== (string) $s[ $k ] ) {
+				$vars[ $var ] = (string) $s[ $k ];
+			}
+		}
+		$out = '';
+		foreach ( $vars as $k => $v ) {
+			$out .= $k . ':' . $v . ';';
+		}
+		return $out;
+	}
+
+	/** The words of the theme's sign-in drawer, for the script that dresses it. */
+	private static function drawer_words() {
+		$s = OCSL_Settings::all();
+		return array(
+			'drawerHead'      => (string) $s['drawer_head'],
+			'drawerTitle'     => (string) $s['drawer_title'],
+			'drawerEmail'     => (string) $s['drawer_email'],
+			'drawerJoinTitle' => (string) $s['drawer_join_title'],
+			'drawerJoinText'  => (string) $s['drawer_join_text'],
+			'drawerJoinBtn'   => (string) $s['drawer_join_btn'],
+			'drawerBack'      => 'חזרה לכניסה עם הטלפון',
 		);
 	}
 
@@ -193,7 +237,7 @@ class OCSL_Gate {
 					'resend'   => 'שלחו לי קוד חדש',
 					'signedIn' => 'נכנסתם! ממשיכים...',
 					'testCode' => 'מצב בדיקה: הקוד הוא %s',
-				),
+				) + self::drawer_words(),
 			)
 		);
 	}

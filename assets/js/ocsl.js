@@ -394,7 +394,72 @@
 
 	/* ---------------- inline blocks (My Account, the shortcode) ---------------- */
 
+	function esc(t) { var d = document.createElement('div'); d.textContent = t == null ? '' : String(t); return d.innerHTML; }
+	var MAIL_ICON = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>';
+
+	/*
+	 * Our block inside a theme's header login drawer (OC main theme: #auth-panel, WooCommerce's
+	 * login form): dress it like OC Theme's drawer. A header line, a centred title, the phone form at
+	 * full width, "או" and an email/password door that opens the theme's own form, and the sign-up at
+	 * the bottom, which opens the theme's own register view. Nothing of the theme is removed.
+	 */
+	function drawerize(el) {
+		var panel = el.closest('#auth-panel, .auth-panel');
+		if (!panel || panel.classList.contains('ocsl-drawer')) { return; }
+		panel.classList.add('ocsl-drawer');
+
+		var head = document.createElement('div');
+		head.className = 'ocsl-dhead';
+		head.textContent = T.drawerHead || '';
+		el.insertBefore(head, el.firstChild);
+		var title = q('[data-ocsl-step="phone"] .ocsl-h', el);
+		if (title && T.drawerTitle) { title.textContent = T.drawerTitle; }
+		var tel = q('[data-ocsl-step="phone"] input[name=phone]', el);
+		if (tel) { tel.setAttribute('placeholder', 'מספר טלפון נייד'); }
+
+		var loginCol = panel.querySelector('#customer_login .u-column1');
+		var oldOr = q('.ocsl-or', el);
+		if (loginCol) {
+			var alt = document.createElement('div');
+			alt.className = 'ocsl-alt';
+			alt.innerHTML = '<p class="ocsl-or"><span>או</span></p><button type="button" class="ocsl-door" data-ocsl-email>' + MAIL_ICON + '<span>' + esc(T.drawerEmail) + '</span></button>';
+			if (oldOr) { oldOr.parentNode.replaceChild(alt, oldOr); } else { el.appendChild(alt); }
+			var back = document.createElement('button');
+			back.type = 'button';
+			back.className = 'ocsl-link ocsl-dback';
+			back.textContent = T.drawerBack || '';
+			loginCol.insertBefore(back, loginCol.firstChild);
+			q('[data-ocsl-email]', alt).addEventListener('click', function () {
+				panel.classList.add('ocsl-email-open');
+				var u = panel.querySelector('#username');
+				if (u) { setTimeout(function () { u.focus(); }, 30); }
+			});
+			back.addEventListener('click', function () {
+				panel.classList.remove('ocsl-email-open');
+				if (tel) { tel.focus(); }
+			});
+		} else if (oldOr) {
+			oldOr.parentNode.removeChild(oldOr);
+		}
+
+		var regBtn = panel.querySelector('#customer_login button.register-form, #customer_login .register-form-link button.auth-btn');
+		var cl = panel.querySelector('#customer_login');
+		if (regBtn && cl) {
+			var foot = document.createElement('div');
+			foot.className = 'ocsl-dfoot';
+			foot.innerHTML = '<p class="ocsl-dfoot-t">' + esc(T.drawerJoinTitle) + '</p>' +
+				(T.drawerJoinText ? '<p class="ocsl-dfoot-s">' + esc(T.drawerJoinText) + '</p>' : '') +
+				'<button type="button" class="ocsl-door" data-ocsl-join>' + esc(T.drawerJoinBtn) + '</button>';
+			(panel.querySelector('.form-login') || el.parentNode).appendChild(foot);
+			q('[data-ocsl-join]', foot).addEventListener('click', function () { regBtn.click(); });
+			var sync = function () { panel.classList.toggle('ocsl-reg-open', cl.classList.contains('register-show')); };
+			if (window.MutationObserver) { new MutationObserver(sync).observe(cl, { attributes: true, attributeFilter: ['class'] }); }
+			sync();
+		}
+	}
+
 	qa('[data-ocsl-inline]').forEach(function (el) {
+		drawerize(el);
 		var b = new Box(el);
 		if (!b.resume()) { b.step('phone'); }
 	});

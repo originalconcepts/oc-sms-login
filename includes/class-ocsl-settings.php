@@ -55,6 +55,22 @@ class OCSL_Settings {
 			'register_text'   => 'זו הפעם הראשונה שלכם כאן. נשמור את הפרטים, ובפעם הבאה תיכנסו רק עם הטלפון.',
 			'consent_text'    => 'אני מאשר/ת את {privacy}',
 			'brand_color'     => '',
+
+			// The popup's look ('' = the plugin's default).
+			'btn_text_color'  => '',
+			'popup_bg'        => '',
+			'text_color'      => '',
+			'radius'          => 16,     // corners of the popup, px
+			'btn_shape'       => 'soft', // soft | round | square: buttons and fields
+			'overlay'         => 55,     // how dark the page gets behind the popup, %
+
+			// The theme's sign-in drawer ("שלום, אורח" in the header).
+			'drawer_head'       => 'התחברות',
+			'drawer_title'      => "מס' טלפון ומתחילים :)",
+			'drawer_email'      => 'כניסה עם מייל וסיסמה',
+			'drawer_join_title' => 'עדיין לא רשומים?',
+			'drawer_join_text'  => 'פותחים חשבון בדקה, וכל הזמנה הבאה מהירה יותר.',
+			'drawer_join_btn'   => 'הרשמה',
 		);
 	}
 
@@ -138,13 +154,15 @@ class OCSL_Settings {
 			'ip_hourly'       => array( 1, 100 ),
 			'daily_cap'       => array( 10, 100000 ),
 			'low_balance'     => array( 0, 100000 ),
+			'radius'          => array( 0, 28 ),
+			'overlay'         => array( 0, 90 ),
 		);
 		foreach ( $ints as $k => $range ) {
 			if ( isset( $in[ $k ] ) ) {
 				$out[ $k ] = max( $range[0], min( $range[1], absint( $in[ $k ] ) ) );
 			}
 		}
-		foreach ( array( 'title', 'subtitle', 'gate_title', 'register_title', 'register_text', 'consent_text' ) as $k ) {
+		foreach ( array( 'title', 'subtitle', 'gate_title', 'register_title', 'register_text', 'consent_text', 'drawer_head', 'drawer_title', 'drawer_email', 'drawer_join_title', 'drawer_join_text', 'drawer_join_btn' ) as $k ) {
 			if ( isset( $in[ $k ] ) ) {
 				$v         = sanitize_text_field( wp_unslash( $in[ $k ] ) );
 				$out[ $k ] = '' === $v ? $def[ $k ] : $v;
@@ -154,9 +172,14 @@ class OCSL_Settings {
 			$e                  = sanitize_email( wp_unslash( $in['alert_email'] ) );
 			$out['alert_email'] = is_email( $e ) ? $e : '';
 		}
-		if ( isset( $in['brand_color'] ) ) {
-			$c                  = sanitize_hex_color( wp_unslash( $in['brand_color'] ) );
-			$out['brand_color'] = $c ? $c : '';
+		foreach ( array( 'brand_color', 'btn_text_color', 'popup_bg', 'text_color' ) as $k ) {
+			if ( isset( $in[ $k ] ) ) {
+				$c         = sanitize_hex_color( wp_unslash( $in[ $k ] ) );
+				$out[ $k ] = $c ? $c : '';
+			}
+		}
+		if ( isset( $in['btn_shape'] ) ) {
+			$out['btn_shape'] = in_array( $in['btn_shape'], array( 'soft', 'round', 'square' ), true ) ? $in['btn_shape'] : 'soft';
 		}
 		return $out;
 	}
