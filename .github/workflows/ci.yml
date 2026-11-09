@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [ '**' ]
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: [ '7.4', '8.0', '8.1', '8.2', '8.3' ]
+    name: PHP ${{ matrix.php }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+          tools: none
+
+      - name: Lint all PHP files
+        run: |
+          find . -name '*.php' -print0 | xargs -0 -n1 -P4 php -l
+
+      # The hub reads Version: from the header, the hub client reports OCSL_VERSION:
+      # the two must never drift apart.
+      - name: Version header matches OCSL_VERSION
+        run: |
+          header="$(grep -m1 -E '^\s*\*\s*Version:' oc-sms-login.php | sed -E 's/.*Version:\s*//' | tr -d '\r ')"
+          const="$(grep -m1 -oE "define\( 'OCSL_VERSION', '[^']+'" oc-sms-login.php | sed -E "s/.*'([^']+)'$/\1/")"
+          echo "header=$header OCSL_VERSION=$const"
+          test -n "$header" && test "$header" = "$const"
+
+  package:
+    runs-on: ubuntu-latest
+    name: Release zip
+    needs: lint
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build oc-sms-login.zip
+        run: bash bin/build-zip.sh
+
+      - name: Upload the zip as a workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: oc-sms-login
+          path: dist/oc-sms-login.zip
+          if-no-files-found: error
