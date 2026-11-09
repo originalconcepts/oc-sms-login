@@ -123,8 +123,20 @@
 			flowClear();
 			this.step('done');
 			var to = data.to || this.to;
+			var dest = (to && !samePage(to, location.href)) ? to : '';
+			var handoff = data.handoff || '';
 			setTimeout(function () {
-				if (to && !samePage(to, location.href)) { location.href = to; } else { location.reload(); }
+				if (handoff) {
+					// The next page load signs in again from a one-time token, in case the browser dropped
+					// the cookie of the background request; the server strips the token right away.
+					var u = new URL(dest || location.href, location.href);
+					u.searchParams.set('ocsl_login', handoff);
+					location.href = u.toString();
+				} else if (dest) {
+					location.href = dest;
+				} else {
+					location.reload();
+				}
 			}, 400);
 		}
 	};

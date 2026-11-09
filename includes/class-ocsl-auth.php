@@ -35,6 +35,7 @@ class OCSL_Auth {
 			add_action( 'wp_ajax_nopriv_ocsl_' . $step, array( __CLASS__, $step ) );
 			add_action( 'wp_ajax_ocsl_' . $step, array( __CLASS__, $step ) );
 		}
+		add_action( 'init', array( __CLASS__, 'handoff_landing' ), 1 );
 	}
 
 	/* ---------------- Guards ---------------- */
@@ -372,10 +373,58 @@ class OCSL_Auth {
 
 		wp_send_json_success(
 			array(
-				'step' => 'done',
-				'to'   => self::target(),
+				'step'    => 'done',
+				'to'      => self::target(),
+				'handoff' => self::handoff( $user_id ),
 			)
 		);
+	}
+
+	/* ---------------- The handoff ---------------- */
+
+	const HANDOFF     = 'ocsl_login';
+	const HANDOFF_TTL = 120;
+
+	/**
+	 * A one-time sign-in token for the browser that just proved the code. The AJAX answer already
+	 * carries the login cookie, but a cookie set by a background request is the one some browsers
+	 * and privacy settings drop: the page the browser goes to next sets it again, in a normal page
+	 * load. Single use, two minutes, kept only as a hash.
+	 *
+	 * @param int $user_id The account.
+	 * @return string
+	 */
+	private static function handoff( $user_id ) {
+		$token = bin2hex( random_bytes( 20 ) );
+		set_transient( 'ocsl_ho_' . hash( 'sha256', $token ), (int) $user_id, self::HANDOFF_TTL );
+		return $token;
+	}
+
+	/**
+	 * A page load that carries ?ocsl_login=<token>: sign that account in (once) and send the browser
+	 * to the same address without the token. A spent or unknown token just drops off the address.
+	 */
+	public static function handoff_landing() {
+		if ( ! isset( $_GET[ self::HANDOFF ] ) || wp_doing_ajax() || is_admin() || ( defined( 'REST_REQUEST' ) && REST_REQUEST ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- the token is the proof.
+			return;
+		}
+		$token = preg_replace( '/[^a-f0-9]/', '', (string) wp_unslash( $_GET[ self::HANDOFF ] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		$key   = 'ocsl_ho_' . hash( 'sha256', $token );
+		$uid   = 40 === strlen( $token ) ? (int) get_transient( $key ) : 0;
+		if ( $uid ) {
+			delete_transient( $key );
+			$user = get_user_by( 'id', $uid );
+			$staff = $user instanceof WP_User && ( user_can( $user, 'manage_options' ) || user_can( $user, 'manage_woocommerce' ) );
+			if ( $user instanceof WP_User && ! $staff && get_current_user_id() !== $uid ) {
+				wp_set_current_user( $uid );
+				wp_set_auth_cookie( $uid, true, is_ssl() );
+			}
+		}
+		nocache_headers();
+		$scheme = is_ssl() ? 'https://' : 'http://';
+		$here   = $scheme . ( isset( $_SERVER['HTTP_HOST'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_HOST'] ) ) : '' ) . ( isset( $_SERVER['REQUEST_URI'] ) ? esc_url_raw( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '/' );
+		wp_safe_redirect( remove_query_arg( self::HANDOFF, $here ), 302 );
+		exit;
 	}
 
 	/* ---------------- Accounts ---------------- */
