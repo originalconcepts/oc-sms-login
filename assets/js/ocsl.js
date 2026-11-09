@@ -11,6 +11,19 @@
 	if (!D) { return; }
 	var T = D.i18n || {};
 	var GUEST_KEY = 'ocsl_guest';
+	var SIGNED_KEY = 'ocsl_signed_in';
+
+	/*
+	 * This script only runs on pages served to a guest. Right after a sign-in, such a page is a stale
+	 * copy (a prefetch made while still a guest, or the browser's cache): fetch it again, once.
+	 */
+	try {
+		var signedAt = parseInt(sessionStorage.getItem(SIGNED_KEY) || '0', 10);
+		if (signedAt) {
+			sessionStorage.removeItem(SIGNED_KEY);
+			if (Date.now() - signedAt < 120000) { location.reload(); return; }
+		}
+	} catch (e) {}
 
 	/* ---------------- helpers ---------------- */
 
@@ -121,6 +134,7 @@
 		}
 		if (data.step === 'done') {
 			flowClear();
+			try { sessionStorage.setItem(SIGNED_KEY, String(Date.now())); } catch (e) {}
 			this.step('done');
 			var to = data.to || this.to;
 			var dest = (to && !samePage(to, location.href)) ? to : '';

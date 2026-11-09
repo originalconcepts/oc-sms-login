@@ -36,6 +36,30 @@ class OCSL_Gate {
 		add_action( 'woocommerce_checkout_process', array( __CLASS__, 'enforce' ), 1 );
 		add_action( 'woocommerce_before_customer_login_form', array( __CLASS__, 'account_block' ), 5 );
 		add_shortcode( 'oc_sms_login', array( __CLASS__, 'shortcode' ) );
+		add_filter( 'wp_speculation_rules_href_exclude_paths', array( __CLASS__, 'no_prefetch' ) );
+	}
+
+	/**
+	 * WordPress (6.8+) has the browser prefetch a link the moment it is pressed. A guest pressing
+	 * "checkout" gets the checkout prefetched as a guest; our popup stops that navigation, the guest
+	 * signs in, and the browser then shows the stale guest copy, popup and all. Pages that differ
+	 * for a signed-in visitor are never prefetched.
+	 *
+	 * @param string[] $paths Paths WordPress already leaves out.
+	 * @return string[]
+	 */
+	public static function no_prefetch( $paths ) {
+		$paths = is_array( $paths ) ? $paths : array();
+		if ( ! function_exists( 'wc_get_page_permalink' ) ) {
+			return $paths;
+		}
+		foreach ( array( 'checkout', 'cart', 'myaccount' ) as $page ) {
+			$path = (string) wp_parse_url( (string) wc_get_page_permalink( $page ), PHP_URL_PATH );
+			if ( '' !== $path && '/' !== $path ) {
+				$paths[] = trailingslashit( $path ) . '*';
+			}
+		}
+		return array_values( array_unique( $paths ) );
 	}
 
 	/**
