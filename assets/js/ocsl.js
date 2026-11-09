@@ -323,6 +323,8 @@
 		if (!modal) { return false; }
 		popupBox.to = to || '';
 		lastFocus = document.activeElement;
+		// Last in <body>, so it stays above a side cart that shares the top z-index.
+		if (document.body.lastElementChild !== modal) { document.body.appendChild(modal); }
 		modal.hidden = false;
 		document.documentElement.classList.add('ocsl-open');
 		if (!popupBox.resume()) { popupBox.step('phone'); }
