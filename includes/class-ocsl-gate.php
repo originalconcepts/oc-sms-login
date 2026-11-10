@@ -34,6 +34,8 @@ class OCSL_Gate {
 		add_action( 'wp_footer', array( __CLASS__, 'popup' ), 5 ); // Before the footer scripts (priority 20) run.
 		add_filter( 'body_class', array( __CLASS__, 'body_class' ) );
 		add_action( 'woocommerce_checkout_process', array( __CLASS__, 'enforce' ), 1 );
+		// The checkout block places its orders through the Store API, which never fires the hook above.
+		add_action( 'woocommerce_store_api_checkout_update_order_from_request', array( __CLASS__, 'enforce_store_api' ), 1 );
 		add_action( 'woocommerce_before_customer_login_form', array( __CLASS__, 'account_block' ), 5 );
 		add_shortcode( 'oc_sms_login', array( __CLASS__, 'shortcode' ) );
 		add_filter( 'wp_speculation_rules_href_exclude_paths', array( __CLASS__, 'no_prefetch' ) );
@@ -90,8 +92,8 @@ class OCSL_Gate {
 		if ( 'off' !== self::mode() ) {
 			return true; // The side cart's checkout button lives on every page.
 		}
-		// The sign-in block also sits in themes' header login drawers, on every page.
-		return (bool) OCSL_Settings::get( 'myaccount_form' );
+		// The sign-in block also sits in themes' header login drawers, on every page; so do the shop's own triggers.
+		return OCSL_Settings::get( 'myaccount_form' ) || '' !== trim( (string) OCSL_Settings::get( 'open_selectors' ) );
 	}
 
 	/** The checkout page itself, before an order exists. */
@@ -118,30 +120,40 @@ class OCSL_Gate {
 
 		wp_add_inline_style( 'ocsl', ':root{' . self::css_vars() . '}' );
 
-		$selectors = trim( (string) OCSL_Settings::get( 'open_selectors' ) );
-		wp_localize_script(
-			'ocsl',
-			'ocslData',
-			array(
-				'ajax'      => admin_url( 'admin-ajax.php' ),
-				'nonce'     => wp_create_nonce( OCSL_Auth::NONCE ),
-				'mode'      => self::mode(),
-				'checkout'  => function_exists( 'wc_get_checkout_url' ) ? wc_get_checkout_url() : '',
-				'cart'      => function_exists( 'wc_get_cart_url' ) ? wc_get_cart_url() : home_url( '/' ),
-				'onCheckout' => self::on_checkout() && 'off' !== self::mode(),
-				'selectors' => $selectors,
-				'test'      => 'test' === OCSL_Sender::transport(),
-				'expiry'    => (int) OCSL_Settings::get( 'code_expiry' ),
-				'i18n'      => array(
-					'sending'   => 'שולחים...',
-					'checking'  => 'בודקים...',
-					'error'     => 'משהו השתבש. נסו שוב.',
-					'resendIn'  => 'אפשר לבקש קוד חדש בעוד %s שניות',
-					'resend'    => 'שלחו לי קוד חדש',
-					'signedIn'  => 'נכנסתם! ממשיכים...',
-					'testCode'  => 'מצב בדיקה: הקוד הוא %s',
-				) + self::drawer_words(),
-			)
+		wp_localize_script( 'ocsl', 'ocslData', self::script_data( true ) );
+	}
+
+	/**
+	 * What the script needs to know.
+	 *
+	 * @param bool $gate The gate's own page load (true), or a page only the shortcode put the script on (false).
+	 * @return array
+	 */
+	private static function script_data( $gate ) {
+		$s    = OCSL_Settings::all();
+		$mode = $gate ? self::mode() : 'off';
+		return array(
+			'ajax'       => admin_url( 'admin-ajax.php' ),
+			'nonce'      => wp_create_nonce( OCSL_Auth::NONCE ),
+			'mode'       => $mode,
+			'checkout'   => ( $gate && function_exists( 'wc_get_checkout_url' ) ) ? wc_get_checkout_url() : '',
+			'cart'       => ( $gate && function_exists( 'wc_get_cart_url' ) ) ? wc_get_cart_url() : home_url( '/' ),
+			'home'       => home_url( '/' ),
+			'onCheckout' => $gate && 'off' !== $mode && self::on_checkout(),
+			'selectors'  => $gate ? trim( (string) $s['open_selectors'] ) : '',
+			'test'       => 'test' === OCSL_Sender::transport(),
+			'expiry'     => (int) $s['code_expiry'],
+			'i18n'       => array(
+				'sending'   => 'שולחים...',
+				'checking'  => 'בודקים...',
+				'error'     => 'משהו השתבש. נסו שוב.',
+				'resendIn'  => 'אפשר לבקש קוד חדש בעוד %s שניות',
+				'resend'    => 'שלחו לי קוד חדש',
+				'signedIn'  => 'נכנסתם! ממשיכים...',
+				'testCode'  => 'מצב בדיקה: הקוד הוא %s',
+				'gateTitle' => (string) $s['gate_title'],
+				'title'     => (string) $s['title'],
+			) + self::drawer_words(),
 		);
 	}
 
@@ -202,6 +214,28 @@ class OCSL_Gate {
 		wc_add_notice( 'כדי להשלים את ההזמנה צריך להתחבר עם מספר הטלפון. רעננו את העמוד והזינו את המספר שלכם.', 'error' );
 	}
 
+	/**
+	 * The same refusal for the checkout block, and for anything else that orders through the Store
+	 * API (express payment buttons included).
+	 *
+	 * @param WC_Order $order The order being built from the request.
+	 * @throws \Exception Refuses a guest's order while the gate is required.
+	 */
+	public static function enforce_store_api( $order ) {
+		if ( is_user_logged_in() || 'required' !== self::mode() ) {
+			return;
+		}
+		if ( $order instanceof WC_Order && $order->get_customer_id() > 0 ) {
+			return; // The order already belongs to an account: never stand in the way of a signed-in customer.
+		}
+		$msg   = 'כדי להשלים את ההזמנה צריך להתחבר עם מספר הטלפון. רעננו את העמוד והזינו את המספר שלכם.';
+		$class = 'Automattic\WooCommerce\StoreApi\Exceptions\RouteException';
+		if ( class_exists( $class ) ) {
+			throw new $class( 'ocsl_login_required', $msg, 401 );
+		}
+		throw new \Exception( $msg );
+	}
+
 	/** The sign-in block above the My Account login forms. */
 	public static function account_block() {
 		if ( is_user_logged_in() || ! OCSL_Settings::get( 'myaccount_form' ) || ! OCSL_Sender::available() ) {
@@ -228,7 +262,7 @@ class OCSL_Gate {
 			$url = plugin_dir_url( OCSL_FILE );
 			wp_enqueue_style( 'ocsl', $url . 'assets/css/ocsl.css', array(), self::ver( 'assets/css/ocsl.css' ) );
 			wp_enqueue_script( 'ocsl', $url . 'assets/js/ocsl.js', array(), self::ver( 'assets/js/ocsl.js' ), true );
-			self::assets_data_fallback();
+			wp_localize_script( 'ocsl', 'ocslData', self::script_data( false ) );
 		}
 		self::$needed = true;
 		ob_start();
@@ -238,37 +272,12 @@ class OCSL_Gate {
 		return (string) ob_get_clean();
 	}
 
-	/** The script's settings when the shortcode loaded it on a page the gate does not cover. */
-	private static function assets_data_fallback() {
-		wp_localize_script(
-			'ocsl',
-			'ocslData',
-			array(
-				'ajax'       => admin_url( 'admin-ajax.php' ),
-				'nonce'      => wp_create_nonce( OCSL_Auth::NONCE ),
-				'mode'       => 'off',
-				'checkout'   => '',
-				'cart'       => home_url( '/' ),
-				'onCheckout' => false,
-				'selectors'  => '',
-				'test'       => 'test' === OCSL_Sender::transport(),
-				'expiry'     => (int) OCSL_Settings::get( 'code_expiry' ),
-				'i18n'       => array(
-					'sending'  => 'שולחים...',
-					'checking' => 'בודקים...',
-					'error'    => 'משהו השתבש. נסו שוב.',
-					'resendIn' => 'אפשר לבקש קוד חדש בעוד %s שניות',
-					'resend'   => 'שלחו לי קוד חדש',
-					'signedIn' => 'נכנסתם! ממשיכים...',
-					'testCode' => 'מצב בדיקה: הקוד הוא %s',
-				) + self::drawer_words(),
-			)
-		);
-	}
-
-	/** The popup, once per page, for guests. */
+	/**
+	 * The popup, once per page, for guests. With the gate off it still opens from the shop's own
+	 * triggers (the header's account icon, window.ocslOpen()).
+	 */
 	public static function popup() {
-		if ( ! self::$needed || is_user_logged_in() || 'off' === self::mode() ) {
+		if ( ! self::$needed || is_user_logged_in() || ! OCSL_Sender::available() ) {
 			return;
 		}
 		$locked = 'required' === self::mode();

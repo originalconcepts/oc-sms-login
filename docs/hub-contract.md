@@ -40,7 +40,7 @@ zero-price plan, or one granted by the agency). For `oc-sms-login` the entitleme
     {"key": "sms2500", "messages": 2500, "price": "₪234.82", "price_ex": 199, "url": "https://my.ocpluginz.com/checkout/?add-to-cart=NNN"},
     …
   ],
-  "buy_url": "https://ocpluginz.com/oc-sms-login.html#credits"
+  "buy_url": "https://ocpluginz.com/oc-sms-login.html#messages"
 }
 ```
 

@@ -35,14 +35,26 @@ class OCSL_Auth {
 			add_action( 'wp_ajax_nopriv_ocsl_' . $step, array( __CLASS__, $step ) );
 			add_action( 'wp_ajax_ocsl_' . $step, array( __CLASS__, $step ) );
 		}
+		add_action( 'wp_ajax_nopriv_ocsl_nonce', array( __CLASS__, 'nonce' ) );
+		add_action( 'wp_ajax_ocsl_nonce', array( __CLASS__, 'nonce' ) );
 		add_action( 'init', array( __CLASS__, 'handoff_landing' ), 1 );
 	}
 
 	/* ---------------- Guards ---------------- */
 
+	/**
+	 * A fresh nonce for a page whose own has died: a page cache can keep serving a page for longer
+	 * than a nonce lives, and refreshing such a page brings the same dead nonce back. The script asks
+	 * here once and repeats its step. Like the nonce printed in the page, another site cannot read it.
+	 */
+	public static function nonce() {
+		nocache_headers();
+		wp_send_json_success( array( 'nonce' => wp_create_nonce( self::NONCE ) ) );
+	}
+
 	private static function guard() {
 		if ( ! check_ajax_referer( self::NONCE, 'nonce', false ) ) {
-			self::fail( 'הדף לא עודכן זמן רב. רעננו אותו ונסו שוב.' );
+			self::fail( 'הדף לא עודכן זמן רב. רעננו אותו ונסו שוב.', array( 'stale' => 1 ) );
 		}
 		if ( is_user_logged_in() ) {
 			wp_send_json_success(

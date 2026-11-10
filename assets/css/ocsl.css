@@ -7,6 +7,7 @@
 	--ocsl-line: #d1d5db;
 	--ocsl-bg: #fff;
 	--ocsl-field-bg: #f6f6f7;
+	--ocsl-field-ink: #1f2937; /* the fields stay white, so their text stays dark whatever the popup's text colour is */
 	--ocsl-err: #b42318;
 	--ocsl-radius: 16px;
 	--ocsl-btn-radius: 10px;
@@ -17,14 +18,19 @@
 html.ocsl-open { overflow: hidden; }
 
 .ocsl-modal[hidden], .ocsl-step[hidden], .ocsl-err[hidden], .ocsl-test[hidden], [data-ocsl-resend][hidden] { display: none !important; }
+/* A theme that sets display on spans, paragraphs or buttons would otherwise show what the script hid. */
+.ocsl-modal [hidden], .ocsl-inline [hidden] { display: none !important; }
+
+/* One box model inside our blocks, whatever the theme's is. */
+.ocsl-modal, .ocsl-modal *, .ocsl-inline, .ocsl-inline * { box-sizing: border-box; }
 
 /* ---------------- the popup ---------------- */
 
 /* The highest z-index there is: themes put their side cart there too (OC Theme's .drawer-panel), and
    the popup opens from inside it. On a tie the later element wins, so the JS moves the popup to the end of <body>. */
-.ocsl-modal { position: fixed; inset: 0; z-index: 2147483647; display: flex; align-items: center; justify-content: center; padding: 16px; direction: rtl; }
-.ocsl-backdrop { position: absolute; inset: 0; background: rgba(17, 24, 39, var(--ocsl-overlay)); }
-.ocsl-dialog { position: relative; width: 100%; max-width: 440px; max-height: calc(100vh - 32px); overflow: auto; background: var(--ocsl-bg); color: var(--ocsl-ink); border-radius: var(--ocsl-radius); box-shadow: 0 24px 60px rgba(0, 0, 0, .25); padding: 30px 28px 26px; box-sizing: border-box; animation: ocsl-in .18s ease-out; text-align: right; }
+.ocsl-modal { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 2147483647; display: flex; align-items: center; justify-content: center; margin: 0; padding: 16px; direction: rtl; }
+.ocsl-backdrop { position: absolute; top: 0; right: 0; bottom: 0; left: 0; background: rgba(17, 24, 39, var(--ocsl-overlay)); }
+.ocsl-dialog { position: relative; width: 100%; max-width: 440px; max-height: calc(100vh - 32px); overflow-x: hidden; overflow-y: auto; background: var(--ocsl-bg); color: var(--ocsl-ink); border-radius: var(--ocsl-radius); box-shadow: 0 24px 60px rgba(0, 0, 0, .25); padding: 30px 28px 26px; box-sizing: border-box; animation: ocsl-in .18s ease-out; text-align: right; }
 @keyframes ocsl-in { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .ocsl-dialog { animation: none; } }
 
@@ -52,19 +58,24 @@ html.ocsl-open { overflow: hidden; }
 /* Themes size h2 for page titles: keep ours a dialog heading wherever it lands. */
 .ocsl-steps .ocsl-h { margin: 0 0 6px !important; padding: 0 !important; font-size: 21px !important; line-height: 1.3 !important; font-weight: 700 !important; color: var(--ocsl-ink) !important; text-align: right; letter-spacing: normal !important; text-transform: none !important; }
 .ocsl-dialog .ocsl-steps .ocsl-h { padding-left: 48px !important; } /* clear of the round close button */
+/* Themes decorate headings with a line or an icon drawn in ::before/::after: not on ours. */
+.ocsl-steps .ocsl-h::before, .ocsl-steps .ocsl-h::after { content: none !important; display: none !important; }
 .ocsl-sub { margin: 0 0 18px !important; font-size: 14.5px; line-height: 1.5; color: var(--ocsl-muted); }
-.ocsl-label { display: block; margin: 0 0 6px; font-size: 13.5px; font-weight: 600; color: var(--ocsl-ink); }
-.ocsl-steps p { margin: 0 0 12px; }
+.ocsl-steps .ocsl-label { display: block !important; float: none !important; width: auto !important; margin: 0 0 6px !important; padding: 0 !important; font-size: 13.5px !important; font-weight: 600 !important; line-height: 1.4 !important; color: var(--ocsl-ink) !important; text-align: right; text-transform: none !important; letter-spacing: normal !important; }
+.ocsl-steps p { margin: 0 0 12px; padding: 0; }
+/* Themes and WooCommerce frame their forms (border, padding, a width, a float): ours are plain. */
+.ocsl-steps form.ocsl-step { float: none !important; width: auto !important; max-width: none !important; margin: 0 !important; padding: 0 !important; border: 0 !important; border-radius: 0 !important; background: none !important; box-shadow: none !important; }
 
 /* Fields and buttons: one height, one box model, whatever the theme says about inputs and buttons. */
 .ocsl-steps .ocsl-input {
 	display: block; width: 100% !important; max-width: none !important; height: 48px !important; min-height: 0 !important; box-sizing: border-box !important;
 	margin: 0 !important; padding: 0 14px !important; font: inherit; font-size: 16px !important; line-height: normal !important;
-	color: var(--ocsl-ink) !important; background: #fff !important; border: 1.5px solid var(--ocsl-line) !important; border-radius: var(--ocsl-field-radius) !important;
-	box-shadow: none !important; outline: none; -webkit-appearance: none; appearance: none;
+	color: var(--ocsl-field-ink) !important; background: #fff !important; border: 1.5px solid var(--ocsl-line) !important; border-radius: var(--ocsl-field-radius) !important;
+	box-shadow: none !important; outline: none; -webkit-appearance: none; appearance: none; float: none !important; text-transform: none !important; text-indent: 0 !important;
 }
+.ocsl-steps .ocsl-input::placeholder { color: #9ca3af !important; opacity: 1 !important; }
 .ocsl-steps .ocsl-input:focus { border-color: var(--ocsl-brand) !important; box-shadow: 0 0 0 3px color-mix(in srgb, var(--ocsl-brand) 18%, transparent) !important; }
-.ocsl-steps .ocsl-tel { letter-spacing: .5px; text-align: left; direction: ltr; }
+.ocsl-steps .ocsl-tel { letter-spacing: .5px; text-align: left !important; direction: ltr !important; }
 
 .ocsl-row { display: flex !important; align-items: stretch !important; gap: 8px; margin: 0; }
 .ocsl-row .ocsl-input { flex: 1 1 auto; min-width: 0; }
@@ -72,7 +83,7 @@ html.ocsl-open { overflow: hidden; }
 
 .ocsl-steps .ocsl-btn {
 	flex: 0 0 auto; display: inline-flex !important; align-items: center !important; justify-content: center !important;
-	height: 48px !important; min-height: 0 !important; width: auto; box-sizing: border-box !important; margin: 0 !important; padding: 0 22px !important;
+	height: 48px !important; min-height: 0 !important; width: auto !important; min-width: 0 !important; max-width: none !important; float: none !important; box-sizing: border-box !important; margin: 0 !important; padding: 0 22px !important;
 	border: 0 !important; border-radius: var(--ocsl-btn-radius) !important; background: var(--ocsl-brand) !important; color: var(--ocsl-btn-ink) !important;
 	font: inherit; font-size: 16px !important; font-weight: 700 !important; line-height: 1 !important; letter-spacing: normal !important; text-transform: none !important;
 	box-shadow: none !important; cursor: pointer; white-space: nowrap; transition: filter .15s;
@@ -96,7 +107,7 @@ html.ocsl-open { overflow: hidden; }
 .ocsl-boxes { display: flex; gap: 8px; justify-content: center; margin: 4px 0 16px; direction: ltr; }
 .ocsl-steps .ocsl-box {
 	width: 48px !important; height: 56px !important; min-height: 0 !important; box-sizing: border-box !important; margin: 0 !important; padding: 0 !important;
-	text-align: center; font: inherit; font-size: 24px !important; font-weight: 700; color: var(--ocsl-ink) !important; background: #fff !important;
+	min-width: 0 !important; float: none !important; max-width: none !important; text-align: center !important; font: inherit; font-size: 24px !important; font-weight: 700; line-height: normal !important; text-transform: none !important; color: var(--ocsl-field-ink) !important; background: #fff !important; -webkit-appearance: none; appearance: none;
 	border: 1.5px solid var(--ocsl-line) !important; border-radius: min(var(--ocsl-field-radius), 12px) !important; outline: none; box-shadow: none !important;
 }
 .ocsl-steps .ocsl-box:focus { border-color: var(--ocsl-brand) !important; box-shadow: 0 0 0 3px color-mix(in srgb, var(--ocsl-brand) 18%, transparent) !important; }
@@ -104,10 +115,20 @@ html.ocsl-open { overflow: hidden; }
 .ocsl-resend { text-align: center; font-size: 13.5px; color: var(--ocsl-muted); margin: 14px 0 0 !important; }
 .ocsl-back, .ocsl-guest { text-align: center; margin: 14px 0 0 !important; }
 
-.ocsl-consent { display: flex; gap: 8px; align-items: flex-start; margin: 4px 0 12px; font-size: 13.5px; line-height: 1.45; color: var(--ocsl-muted); cursor: pointer; }
-.ocsl-consent input { margin-top: 3px; flex: 0 0 auto; width: 18px; height: 18px; accent-color: var(--ocsl-brand); }
+.ocsl-steps .ocsl-consent { display: flex !important; gap: 8px; align-items: flex-start; float: none !important; width: auto !important; margin: 4px 0 12px !important; padding: 0 !important; font-size: 13.5px !important; font-weight: 400 !important; line-height: 1.45 !important; color: var(--ocsl-muted) !important; text-transform: none !important; letter-spacing: normal !important; cursor: pointer; }
+/* Themes that draw their own checkbox hide the real one: ours is the browser's, always visible. */
+.ocsl-steps .ocsl-consent input[type="checkbox"] {
+	position: static !important; display: inline-block !important; flex: 0 0 auto; width: 18px !important; height: 18px !important; min-width: 0 !important; min-height: 0 !important;
+	margin: 3px 0 0 !important; padding: 0 !important; opacity: 1 !important; visibility: visible !important; clip: auto !important; clip-path: none !important; transform: none !important;
+	-webkit-appearance: checkbox !important; appearance: auto !important; accent-color: var(--ocsl-brand);
+}
+.ocsl-steps .ocsl-consent input[type="checkbox"] + span::before, .ocsl-steps .ocsl-consent input[type="checkbox"] + span::after { content: none !important; display: none !important; }
+.ocsl-steps .ocsl-consent span { padding: 0 !important; margin: 0 !important; }
 .ocsl-consent a { color: var(--ocsl-brand); }
-.ocsl-hp { position: absolute !important; left: -9999px !important; width: 1px; height: 1px; overflow: hidden; }
+.ocsl-consent a, .ocsl-steps .ocsl-consent a { color: var(--ocsl-brand) !important; text-decoration: underline !important; }
+/* The honeypot: out of sight in place. Pushed far to the side it gave the right-to-left popup a sideways scrollbar. */
+.ocsl-steps .ocsl-hp { position: absolute !important; left: auto !important; right: auto !important; width: 1px !important; height: 1px !important; margin: -1px !important; padding: 0 !important; overflow: hidden !important; clip: rect(0 0 0 0) !important; clip-path: inset(50%) !important; opacity: 0 !important; pointer-events: none !important; }
+.ocsl-steps .ocsl-hp input { width: 1px !important; height: 1px !important; min-width: 0 !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important; border: 0 !important; float: none !important; }
 
 .ocsl-done { text-align: center; padding: 24px 0 8px; }
 .ocsl-done .ocsl-h { padding: 0 !important; margin-top: 14px !important; text-align: center !important; }
@@ -135,10 +156,10 @@ html.ocsl-open { overflow: hidden; }
 .ocsl-steps button::before, .ocsl-steps button::after { content: none !important; display: none !important; }
 .ocsl-drawer .ocsl-steps [data-ocsl-step="phone"] .ocsl-h { text-align: center !important; font-size: 22px !important; margin: 4px 0 18px !important; }
 .ocsl-drawer .ocsl-steps [data-ocsl-step="phone"] .ocsl-sub,
-.ocsl-drawer .ocsl-steps [data-ocsl-step="phone"] .ocsl-label { display: none; }
+.ocsl-drawer .ocsl-steps [data-ocsl-step="phone"] .ocsl-label { display: none !important; }
 .ocsl-drawer .ocsl-row { flex-direction: column; gap: 14px; }
 .ocsl-drawer .ocsl-steps .ocsl-input { background: var(--ocsl-field-bg) !important; border-color: #e5e2dd !important; }
-.ocsl-drawer .ocsl-steps .ocsl-tel { text-align: center; }
+.ocsl-drawer .ocsl-steps .ocsl-tel { text-align: center !important; }
 .ocsl-drawer .ocsl-steps .ocsl-btn { width: 100% !important; }
 .ocsl-alt { margin: 26px 0 0; }
 .ocsl-alt .ocsl-or { margin: 0 0 14px !important; }
@@ -166,7 +187,8 @@ html.ocsl-open { overflow: hidden; }
 /* The theme's email/password form: closed until asked for; its own "או / הרשמה" give way to ours.
    Its register column (it slides in from the side) keeps its height even unseen: out until asked for. */
 .ocsl-drawer:not(.ocsl-email-open):not(.ocsl-reg-open) #customer_login { display: none !important; }
-.ocsl-drawer.ocsl-email-open:not(.ocsl-reg-open) #customer_login .u-column2 { display: none !important; }
+/* Only where our footer has a door to the sign-up (.ocsl-has-join): a theme without one keeps its sign-up in sight. */
+.ocsl-drawer.ocsl-has-join.ocsl-email-open:not(.ocsl-reg-open) #customer_login .u-column2 { display: none !important; }
 .ocsl-drawer.ocsl-email-open #customer_login { height: auto !important; min-height: 0 !important; }
 .ocsl-drawer #customer_login .u-column1 .myaccount-link-or-container,
 .ocsl-drawer #customer_login .u-column1 .register-form-link { display: none !important; }
@@ -179,7 +201,10 @@ html.ocsl-open { overflow: hidden; }
 
 /* ---------------- the checkout behind the gate ---------------- */
 
-body.ocsl-gated-required form.checkout { filter: blur(2px); pointer-events: none; user-select: none; }
+/* The classic checkout form, and the checkout block. */
+body.ocsl-gated-required form.checkout,
+body.ocsl-gated-required .wp-block-woocommerce-checkout,
+body.ocsl-gated-required .wc-block-checkout { filter: blur(2px); pointer-events: none; user-select: none; }
 
 /* ---------------- phones: the popup is a sheet from the bottom ---------------- */
 
