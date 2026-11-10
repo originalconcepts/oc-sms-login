@@ -36,6 +36,18 @@ outage that answers "unavailable"), the gate stands down and the checkout opens 
 | `direct` | `OC_PLUGINZ_AGENCY` + `OCSL_ACTIVETRAIL_KEY` in wp-config.php | our own sites call ActiveTrail themselves |
 | `test` | `OCSL_TEST_MODE` in wp-config.php | nothing is sent; the code is shown in the popup. **Development copies only**: anyone can sign in to any account. A constant, never a setting. |
 
+## Any theme, any checkout
+
+- The popup and the inline block reset what themes do to buttons, fields, labels, headings, forms and
+  checkboxes; every selector of ours is under `.ocsl-`, so the theme is never touched in return.
+- `required` is enforced on the classic checkout (`woocommerce_checkout_process`) and on the checkout
+  block and express payments (`woocommerce_store_api_checkout_update_order_from_request`, a 401).
+- A page served from a cache with a dead nonce heals itself: the script fetches a fresh one
+  (`ocsl_nonce`) and repeats its step.
+- Plain permalinks (`?page_id=`) are told apart; links to pay for an existing order are left alone.
+- A theme whose login template lacks WooCommerce's hooks: use `[oc_sms_login]`, or name the header's
+  account icon in "פתיחת הכניסה גם מ..." (the popup opens from it even with the gate off).
+
 ## Security
 
 - Codes: `random_int`, stored only as `wp_hash(code|phone)`, die after `code_expiry` seconds or

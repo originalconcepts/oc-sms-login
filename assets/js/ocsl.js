@@ -31,7 +31,7 @@
 	function qa(sel, root) { return [].slice.call((root || document).querySelectorAll(sel)); }
 	function fmt(s, v) { return String(s || '').replace('%s', v); }
 
-	function post(action, data) {
+	function send(action, data) {
 		var body = new FormData();
 		body.append('action', 'ocsl_' + action);
 		body.append('nonce', D.nonce);
@@ -41,10 +41,28 @@
 			.catch(function () { return { success: false, data: { msg: T.error } }; });
 	}
 
+	/*
+	 * A page cache can serve this page long after its nonce died (a guest's nonce lives half a day to
+	 * a day, a cached page often longer). The server says so (stale): take a fresh nonce and ask again,
+	 * once, so the visitor never meets "refresh the page" on a page that a refresh cannot renew.
+	 */
+	function post(action, data) {
+		return send(action, data).then(function (res) {
+			if (!res || res.success || !res.data || !res.data.stale) { return res; }
+			return send('nonce', {}).then(function (n) {
+				if (!n || !n.success || !n.data || !n.data.nonce) { return res; }
+				D.nonce = n.data.nonce;
+				return send(action, data);
+			});
+		});
+	}
+
 	function samePage(a, b) {
 		try {
 			var x = new URL(a, location.href), y = new URL(b, location.href);
-			return x.origin === y.origin && x.pathname.replace(/\/+$/, '') === y.pathname.replace(/\/+$/, '');
+			if (x.origin !== y.origin || x.pathname.replace(/\/+$/, '') !== y.pathname.replace(/\/+$/, '')) { return false; }
+			// Plain permalinks: every page shares one path and differs by ?page_id=.
+			return (x.searchParams.get('page_id') || '') === (y.searchParams.get('page_id') || '');
 		} catch (e) { return false; }
 	}
 
@@ -323,6 +341,9 @@
 		if (!modal) { return false; }
 		popupBox.to = to || '';
 		lastFocus = document.activeElement;
+		// On the way to the checkout the title says so; opened from the header's icon it is a plain sign-in.
+		var h = q('#ocsl-title', modal), words = to ? T.gateTitle : T.title;
+		if (h && words) { h.textContent = words; }
 		// Last in <body>, so it stays above a side cart that shares the top z-index.
 		if (document.body.lastElementChild !== modal) { document.body.appendChild(modal); }
 		modal.hidden = false;
@@ -334,7 +355,8 @@
 	function closePopup() {
 		if (!modal) { return; }
 		if (modal.hasAttribute('data-ocsl-locked') && D.onCheckout) {
-			location.href = D.cart; // The checkout stays closed to guests: back to the cart.
+			// The checkout stays closed to guests: back to the cart (or home, in a shop whose cart is the checkout page).
+			location.href = (D.cart && !samePage(D.cart, location.href)) ? D.cart : (D.home || '/');
 			return;
 		}
 		modal.hidden = true;
@@ -374,6 +396,8 @@
 
 	function isCheckoutTrigger(el) {
 		var a = el.closest('a[href]');
+		// Paying for an existing order, or its thank-you page, are not the way into the checkout.
+		if (a && /[?&\/](order-pay|order-received)[=\/]/.test(a.href)) { return ''; }
 		if (a && D.checkout && samePage(a.href, D.checkout)) { return a.href; }
 		var b = el.closest('.checkout-button, a.checkout, [name="proceed_to_checkout"]');
 		if (b) { return D.checkout; }
@@ -467,6 +491,7 @@
 				(T.drawerJoinText ? '<p class="ocsl-dfoot-s">' + esc(T.drawerJoinText) + '</p>' : '') +
 				'<button type="button" class="ocsl-door" data-ocsl-join>' + esc(T.drawerJoinBtn) + '</button>';
 			(panel.querySelector('.form-login') || el.parentNode).appendChild(foot);
+			panel.classList.add('ocsl-has-join');
 			q('[data-ocsl-join]', foot).addEventListener('click', function () { regBtn.click(); });
 			var sync = function () { panel.classList.toggle('ocsl-reg-open', cl.classList.contains('register-show')); };
 			if (window.MutationObserver) { new MutationObserver(sync).observe(cl, { attributes: true, attributeFilter: ['class'] }); }

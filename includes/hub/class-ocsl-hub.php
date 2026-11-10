@@ -41,7 +41,7 @@ class OCSL_Hub {
 	const OPTION      = 'ocsl_hub';
 	const CRON        = 'ocsl_hub_refresh';
 	const ACCOUNT_URL = 'https://my.ocpluginz.com/account/';
-	const PRICING_URL = 'https://ocpluginz.com/oc-sms-login.html#credits';
+	const PRICING_URL = 'https://ocpluginz.com/oc-sms-login#pricing';
 	const CAP         = 'manage_options';
 
 	/** Codes the hub answers a send with when the balance cannot cover it. */
@@ -570,7 +570,7 @@ class OCSL_Hub {
 		}
 		switch ( self::status() ) {
 			case 'no_key':
-				return 'קודי ה-SMS נשלחים דרך OC Pluginz. חברו מפתח רישיון כדי שהכניסה עם SMS תעבוד. עד אז הקופה פתוחה כרגיל לאורחים.';
+				return 'קודי ה-SMS נשלחים דרך OC Pluginz. חברו את מפתח הרישיון (קיבלתם אותו במייל, בחינם) כדי שהכניסה עם SMS תעבוד. עד אז הקופה פתוחה כרגיל לאורחים.';
 			case 'refused':
 				return 'OC Pluginz לא קיבל את מפתח הרישיון של OC SMS Login, ולכן קודים לא נשלחים. הקופה פתוחה כרגיל לאורחים.';
 			case 'unverified':
@@ -586,7 +586,17 @@ class OCSL_Hub {
 	 * codes do not go out, a grace-days warning, or a low balance.
 	 */
 	public static function notice() {
-		if ( ! current_user_can( self::CAP ) || ! class_exists( 'OCSL_Admin' ) || ! OCSL_Admin::is_own_screen() ) {
+		if ( ! current_user_can( self::CAP ) || ! class_exists( 'OCSL_Admin' ) ) {
+			return;
+		}
+		if ( ! OCSL_Admin::is_own_screen() ) {
+			// Fresh from the Plugins screen: say what is left to do, where the shop owner is looking.
+			$screen = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
+			$fresh  = $screen && in_array( $screen->id, array( 'plugins', 'dashboard' ), true );
+			if ( $fresh && ! self::agency() && 'none' === OCSL_Sender::transport() && 'no_key' === self::status() ) {
+				echo '<div class="notice notice-info"><p><strong>OC SMS Login מותקן.</strong> נשאר לחבר את מפתח הרישיון שקיבלתם במייל, ולרכוש חבילת הודעות מתוך התוסף. עד אז הקופה פתוחה לאורחים כרגיל. <a href="'
+					. esc_url( self::settings_url() ) . '">לחיבור המפתח</a></p></div>';
+			}
 			return;
 		}
 		if ( 'test' === OCSL_Sender::transport() ) {
@@ -603,6 +613,10 @@ class OCSL_Hub {
 			if ( 'grace' === self::status() ) {
 				$text = 'תוקף הרישיון של OC SMS Login הסתיים והוא בימי חסד. חדשו עכשיו, אחרת הקודים יפסיקו להישלח.';
 				$kind = 'warning';
+			} elseif ( null !== $balance && $balance <= 0 ) {
+				echo '<div class="notice notice-error"><p>' . esc_html( 'אין יתרת הודעות SMS, ולכן הכניסה עם SMS לא פעילה והקופה פתוחה לאורחים כרגיל.' )
+					. ' <a href="' . esc_url( OCSL_Admin::url( 'credits' ) ) . '">לרכישת חבילה</a></p></div>';
+				return;
 			} elseif ( null !== $balance && $balance < (int) OCSL_Settings::get( 'low_balance' ) ) {
 				$text = sprintf( 'נשארו %s הודעות SMS ביתרה. כשהיתרה תיגמר, הכניסה עם SMS תיעצר והקופה תיפתח לאורחים כרגיל.', number_format_i18n( $balance ) );
 				$kind = 'warning';

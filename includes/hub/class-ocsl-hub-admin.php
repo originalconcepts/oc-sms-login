@@ -103,7 +103,12 @@ class OCSL_Hub_Admin {
 			<h1>חשבון OC Pluginz</h1>
 			<div style="max-width:760px;">
 				<?php if ( 'connected' === $notice ) : ?>
-					<div class="notice notice-success inline"><p>מחובר. הרישיון פעיל באתר הזה.</p></div>
+					<?php $left = OCSL_Hub::balance(); ?>
+					<div class="notice notice-success inline"><p>מחובר. הרישיון פעיל באתר הזה.
+						<?php if ( null !== $left && $left <= 0 ) : ?>
+							השלב הבא: חבילת הודעות, כדי שקודים יתחילו להישלח. <a href="<?php echo esc_url( OCSL_Admin::url( 'credits' ) ); ?>">לחבילות ה-SMS</a>
+						<?php endif; ?>
+					</p></div>
 				<?php elseif ( 'disconnected' === $notice ) : ?>
 					<div class="notice notice-info inline"><p>נותק. המקום של האתר הזה ברישיון התפנה.</p></div>
 				<?php elseif ( 'refreshed' === $notice ) : ?>
@@ -139,7 +144,7 @@ class OCSL_Hub_Admin {
 					<div class="card" style="max-width:none;">
 						<h2>חיבור ל-OC Pluginz</h2>
 						<p><strong style="color:#646970">לא מחובר</strong></p>
-						<p>הדביקו את מפתח הרישיון מחשבון OC Pluginz שלכם. הוא נשלח במייל עם הרכישה ומופיע גם בחשבון.</p>
+						<p>הדביקו את מפתח הרישיון שקיבלתם במייל כשהורדתם את התוסף (ההורדה חינמית). הוא מופיע גם באזור האישי ב-OC Pluginz. אחרי החיבור רוכשים חבילת הודעות במסך "חבילות SMS", כאן בתוסף.</p>
 						<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 							<?php wp_nonce_field( 'ocsl_hub_connect' ); ?>
 							<input type="hidden" name="action" value="ocsl_hub_connect">
@@ -279,7 +284,7 @@ class OCSL_Hub_Admin {
 		<p class="description">
 			<a href="<?php echo esc_url( OCSL_Hub::ACCOUNT_URL ); ?>" target="_blank" rel="noopener">לחשבון OC Pluginz</a>
 			&nbsp;·&nbsp;
-			רישיון חדש?
+			אין לכם מפתח? מקבלים אותו בחינם:
 			<a href="<?php echo esc_url( OCSL_Hub::PRICING_URL ); ?>" target="_blank" rel="noopener" dir="ltr"><?php echo esc_html( OCSL_Hub::PRICING_URL ); ?></a>
 		</p>
 		<?php

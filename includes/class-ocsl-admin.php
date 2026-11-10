@@ -136,7 +136,7 @@ class OCSL_Admin {
 			case 'hub':
 				$b = OCSL_Hub::balance();
 				if ( null !== $b && $b <= 0 ) {
-					return array( 'err', 'יתרת ההודעות נגמרה, ולכן הקופה פתוחה לאורחים כרגיל עד שתירכש חבילה.' );
+					return array( 'err', 'אין יתרת הודעות, ולכן הכניסה עם SMS לא פעילה והקופה פתוחה לאורחים כרגיל. רוכשים חבילה במסך "חבילות SMS".' );
 				}
 				return array( 'ok', 'הקודים נשלחים דרך OC Pluginz' . ( null === $b ? '.' : sprintf( '. יתרה: %s הודעות.', number_format_i18n( $b ) ) ) );
 		}
@@ -159,6 +159,7 @@ class OCSL_Admin {
 				<div class="notice notice-success is-dismissible"><p>ההגדרות נשמרו.</p></div>
 			<?php endif; ?>
 			<p class="ocsl-state ocsl-state-<?php echo esc_attr( $line[0] ); ?>"><?php echo esc_html( $line[1] ); ?></p>
+			<?php self::setup_steps(); ?>
 
 			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 				<?php wp_nonce_field( 'ocsl_save' ); ?>
@@ -345,6 +346,76 @@ class OCSL_Admin {
 		self::styles();
 	}
 
+	/**
+	 * The way from "installed" to "working", for a shop that is not there yet: the licence key, a
+	 * pack of messages, and the gate. Gone once all three stand. Hub sites only (test mode and agency
+	 * mode have neither a key nor a balance).
+	 */
+	public static function setup_steps() {
+		$t = OCSL_Sender::transport();
+		if ( 'test' === $t || 'direct' === $t || OCSL_Hub::agency() ) {
+			return;
+		}
+		$licensed = OCSL_Hub::allows();
+		$balance  = OCSL_Hub::balance();
+		$funded   = $licensed && null !== $balance && $balance > 0;
+		$gate     = (string) OCSL_Settings::get( 'gate' );
+		$live     = $funded && OCSL_Sender::available();
+		if ( $live && 'off' !== $gate ) {
+			return;
+		}
+		$modes = array(
+			'required' => 'חובה',
+			'optional' => 'רשות',
+		);
+		$steps = array(
+			array(
+				$licensed,
+				'חיבור מפתח הרישיון',
+				$licensed
+					? 'האתר מחובר ל-OC Pluginz.'
+					: 'המפתח נשלח אליכם במייל כשהורדתם את התוסף (ההורדה חינמית), ומופיע גם באזור האישי ב-OC Pluginz.',
+				$licensed ? '' : OCSL_Hub::settings_url(),
+				'לחיבור המפתח',
+			),
+			array(
+				$funded,
+				'רכישת חבילת הודעות',
+				$funded
+					? sprintf( 'ביתרה %s הודעות.', number_format_i18n( (int) $balance ) )
+					: 'התוסף חינמי, והקודים נשלחים מיתרת הודעות SMS. את החבילה רוכשים כאן, מתוך התוסף, בתשלום מאובטח. ההודעות לא פגות.',
+				( $funded || ! $licensed ) ? '' : self::url( 'credits' ),
+				'לחבילות ה-SMS',
+			),
+			array(
+				$live && 'off' !== $gate,
+				'הכניסה עם SMS פעילה בקופה',
+				$live
+					? 'שער הטלפון כבוי בהגדרות למטה. הכניסה עם SMS פועלת רק בעמוד "החשבון שלי" ובשורטקוד.'
+					: sprintf( 'ברגע שיש מפתח ויתרה, שער הטלפון עולה לבד (מצב "%s"). עד אז הקופה פתוחה לאורחים כרגיל.', isset( $modes[ $gate ] ) ? $modes[ $gate ] : 'כבוי' ),
+				'',
+				'',
+			),
+		);
+		echo '<ol class="ocsl-setup" aria-label="שלבי ההפעלה">';
+		$first = true;
+		foreach ( $steps as $i => $st ) {
+			$now = ! $st[0] && $first;
+			if ( ! $st[0] ) {
+				$first = false;
+			}
+			echo '<li class="' . esc_attr( $st[0] ? 'is-done' : ( $now ? 'is-now' : '' ) ) . '">';
+			echo '<span class="ocsl-setup-n" aria-hidden="true">' . ( $st[0] ? '&#10003;' : (int) ( $i + 1 ) ) . '</span>';
+			echo '<span class="ocsl-setup-b"><strong>' . esc_html( $st[1] ) . ( $st[0] ? ' <span class="screen-reader-text">(בוצע)</span>' : '' ) . '</strong>';
+			echo '<span>' . esc_html( $st[2] ) . '</span>';
+			if ( $now && '' !== $st[3] ) {
+				echo '<a class="button button-primary" href="' . esc_url( $st[3] ) . '">' . esc_html( $st[4] ) . '</a>';
+			}
+			echo '</span></li>';
+		}
+		echo '</ol>';
+	}
+
 	/* ---------------- The packs ---------------- */
 
 	public static function refresh_balance() {
@@ -390,9 +461,12 @@ class OCSL_Admin {
 		if ( ! current_user_can( self::CAP ) ) {
 			return;
 		}
-		OCSL_Hub::refresh_if_stale();
+		// A shop with no messages is here to buy them, and comes back here once it has paid: ask the hub sooner.
+		$known = OCSL_Hub::balance();
+		OCSL_Hub::refresh_if_stale( ( null === $known || $known <= 0 ) ? 60 : 600 );
 		$t       = OCSL_Sender::transport();
 		$balance = OCSL_Hub::balance();
+		$linked  = OCSL_Hub::allows();
 		$packs   = self::packs();
 		$pick    = 2 < count( $packs ) ? $packs[2]['key'] : ( $packs ? $packs[0]['key'] : '' );
 		$err     = isset( $_GET['ocsl_err'] ) ? sanitize_text_field( rawurldecode( wp_unslash( $_GET['ocsl_err'] ) ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
@@ -408,7 +482,10 @@ class OCSL_Admin {
 			<h1>חבילות SMS</h1>
 			<?php if ( '' !== $err ) : ?>
 				<div class="notice notice-error"><p><?php echo esc_html( $err ); ?></p></div>
+			<?php elseif ( isset( $_GET['ocsl_ok'] ) ) : // phpcs:ignore WordPress.Security.NonceVerification.Recommended ?>
+				<div class="notice notice-success is-dismissible"><p><?php echo esc_html( null === $balance ? 'היתרה עודכנה.' : sprintf( 'היתרה עודכנה: %s הודעות.', number_format_i18n( $balance ) ) ); ?></p></div>
 			<?php endif; ?>
+			<?php self::setup_steps(); ?>
 
 			<div class="ocsl-balance">
 				<div>
@@ -427,7 +504,7 @@ class OCSL_Admin {
 					</span>
 				</div>
 				<?php if ( 'hub' === $t || 'none' === $t ) : ?>
-					<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+					<form method="post" class="ocsl-balance-form" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 						<?php wp_nonce_field( 'ocsl_balance' ); ?>
 						<input type="hidden" name="action" value="ocsl_balance">
 						<button class="button">רענון היתרה</button>
@@ -458,9 +535,15 @@ class OCSL_Admin {
 				</div>
 				<p>
 					<a class="button button-primary button-hero ocsl-pay" href="#" target="_blank" rel="noopener" aria-disabled="true">לתשלום מאובטח</a>
-					<span class="ocsl-pay-note description" hidden>הרכישה תיפתח ברגע שהאתר מחובר ל-OC Pluginz. <a href="<?php echo esc_url( OCSL_Hub::settings_url() ); ?>">לחיבור החשבון</a></span>
+					<?php if ( $linked ) : ?>
+						<span class="ocsl-pay-note description" hidden>קישורי התשלום עוד לא הגיעו מ-OC Pluginz. לחצו על "רענון היתרה", ואם הכפתור נשאר כבוי כתבו לנו.</span>
+					<?php else : ?>
+						<span class="ocsl-pay-note description" hidden>הרכישה נפתחת ברגע שהאתר מחובר ל-OC Pluginz עם מפתח הרישיון. <a href="<?php echo esc_url( OCSL_Hub::settings_url() ); ?>">לחיבור המפתח</a></span>
+					<?php endif; ?>
 				</p>
+				<p class="ocsl-pay-back description" role="status" hidden>התשלום נפתח בלשונית חדשה. אחרי התשלום חזרו לכאן, והיתרה תתעדכן לבד.</p>
 				<ul class="ocsl-notes">
+					<li>התשלום נרשם על חשבון OC Pluginz שבו נמצא הרישיון של האתר. בדף התשלום השתמשו באותו מייל שאליו נשלח מפתח הרישיון, כדי שההודעות ייכנסו ליתרה של האתר הזה.</li>
 					<li>החבילות לא פגות בסוף החודש - היתרה נשארת עד שמשתמשים בה.</li>
 					<li>חשבונית מס/קבלה נשלחת למייל של מנהל החשבון מיד אחרי התשלום.</li>
 					<li>המחירים לא כוללים מע״מ (<?php echo esc_html( (string) ( self::VAT * 100 ) ); ?>%). הסכום שיחויב מופיע מתחת לכל חבילה.</li>
@@ -476,7 +559,22 @@ class OCSL_Admin {
 				if (url) { pay.href = url; pay.removeAttribute('aria-disabled'); pay.classList.remove('disabled'); note.hidden = true; }
 				else { pay.href = '#'; pay.setAttribute('aria-disabled', 'true'); pay.classList.add('disabled'); note.hidden = false; }
 			}
-			pay.addEventListener('click', function (e) { if (pay.getAttribute('aria-disabled')) { e.preventDefault(); } });
+			// After the payment tab, the shop owner comes back to this one: fetch the new balance for them, once.
+			var back = document.querySelector('.ocsl-pay-back'), form = document.querySelector('.ocsl-balance-form'), went = false, asked = false;
+			function refresh() {
+				if (!went || asked || !form || document.hidden) { return; }
+				asked = true;
+				if (back) { back.textContent = 'מעדכנים את היתרה...'; }
+				form.submit();
+			}
+			pay.addEventListener('click', function (e) {
+				if (pay.getAttribute('aria-disabled')) { e.preventDefault(); return; }
+				if (back) { back.hidden = false; }
+				// Not before the new tab has taken the focus away.
+				setTimeout(function () { went = true; }, 1500);
+			});
+			window.addEventListener('focus', refresh);
+			document.addEventListener('visibilitychange', refresh);
 			document.querySelectorAll('input[name=ocsl_pack]').forEach(function (r) { r.addEventListener('change', sync); });
 			sync();
 		})();
@@ -567,6 +665,17 @@ class OCSL_Admin {
 		.ocsl-pack-bottom{color:#646970;font-size:12.5px}
 		.ocsl-pay.disabled{opacity:.55;cursor:not-allowed}
 		.ocsl-notes{color:#646970;font-size:13px;margin:12px 0 0;list-style:disc;padding-right:18px}
+		.ocsl-pay-back[hidden],.ocsl-pay-note[hidden]{display:none}
+		.ocsl-setup{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;max-width:860px;margin:14px 0 18px;padding:0;list-style:none}
+		.ocsl-setup li{display:flex;gap:12px;align-items:flex-start;margin:0;padding:14px 16px;background:#fff;border:1px solid #dcdcde;border-radius:10px;color:#646970}
+		.ocsl-setup li.is-now{border-color:#2271b1;box-shadow:0 0 0 1px #2271b1}
+		.ocsl-setup-n{flex:0 0 auto;width:26px;height:26px;border-radius:50%;background:#f0f0f1;color:#50575e;font-weight:600;font-size:13px;line-height:26px;text-align:center}
+		.ocsl-setup li.is-now .ocsl-setup-n{background:#2271b1;color:#fff}
+		.ocsl-setup li.is-done .ocsl-setup-n{background:#ecfdf3;color:#05603a}
+		.ocsl-setup-b{display:flex;flex-direction:column;gap:4px;align-items:flex-start;min-width:0;font-size:13px;line-height:1.5}
+		.ocsl-setup-b strong{font-size:14px;color:#1d2327}
+		.ocsl-setup-b .button{margin-top:6px}
+		@media (max-width:960px){.ocsl-setup{grid-template-columns:1fr}}
 		@media (max-width:900px){.ocsl-packs{grid-template-columns:1fr 1fr}}
 		@media (max-width:600px){.ocsl-packs{grid-template-columns:1fr}}
 		</style>
