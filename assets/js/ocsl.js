@@ -11,6 +11,7 @@
 	if (!D) { return; }
 	var T = D.i18n || {};
 	var GUEST_KEY = 'ocsl_guest';
+	var NEW_KEY = 'ocsl_new';
 	var SIGNED_KEY = 'ocsl_signed_in';
 
 	/*
@@ -68,6 +69,20 @@
 
 	function guestChosen() {
 		try { return sessionStorage.getItem(GUEST_KEY) === '1'; } catch (e) { return false; }
+	}
+
+	/*
+	 * A new customer (a number the shop has never seen) whom the server let through to the checkout
+	 * as a guest. The server remembers it in the shopper's session and says so (D.pass); this tab
+	 * remembers it too, for pages that came from a cache. On the checkout itself the server's word is
+	 * the only one: a checkout that still asks for the phone means the pass is gone.
+	 */
+	if (D.onCheckout) {
+		try { sessionStorage.removeItem(NEW_KEY); } catch (e) {}
+	}
+	function passed() {
+		if (D.pass) { return true; }
+		try { return sessionStorage.getItem(NEW_KEY) === '1'; } catch (e) { return false; }
 	}
 
 	/*
@@ -136,6 +151,21 @@
 		}
 		if (data.step === 'register') {
 			this.step('register');
+			return;
+		}
+		if (data.step === 'guest') {
+			// A new customer on the way to the checkout: no code. On to the checkout as a guest.
+			flowClear();
+			try { sessionStorage.setItem(NEW_KEY, '1'); } catch (e) {}
+			var go = data.to || this.to;
+			if (go && !samePage(go, location.href)) {
+				var words = q('[data-ocsl-step="done"] .ocsl-h', this.root);
+				if (words && T.toCheckout) { words.textContent = T.toCheckout; }
+				this.step('done');
+				location.href = go;
+			} else {
+				openGate(data.phone);
+			}
 			return;
 		}
 		if (data.step === 'code') {
@@ -259,7 +289,7 @@
 			var form = this;
 			self.phone = q('input[name=phone]', form).value;
 			if (self.phone.replace(/\D/g, '').length < 9) { self.error('phone', 'הזינו מספר טלפון נייד.'); return; }
-			self.lock(form, true);
+			self.lock(form, true, T.checking);
 			post('start', { phone: self.phone, to: self.to }).then(function (res) {
 				self.lock(form, false);
 				self.answer(res, 'phone');
@@ -364,6 +394,22 @@
 		if (lastFocus && lastFocus.focus) { lastFocus.focus(); }
 	}
 
+	/** The checkout page, opened in place for a new customer who was let through as a guest. */
+	function openGate(phone) {
+		document.body.classList.remove('ocsl-gated', 'ocsl-gated-required', 'ocsl-gated-optional');
+		if (modal) {
+			modal.removeAttribute('data-ocsl-locked');
+			modal.hidden = true;
+		}
+		document.documentElement.classList.remove('ocsl-open');
+		var tel = q('#billing_phone, input[name="billing_phone"], #billing-phone, #shipping-phone');
+		if (tel && !tel.value && phone) {
+			tel.value = phone;
+			tel.dispatchEvent(new Event('input', { bubbles: true }));
+			tel.dispatchEvent(new Event('change', { bubbles: true }));
+		}
+	}
+
 	if (modal) {
 		qa('[data-ocsl-close]', modal).forEach(function (el) { el.addEventListener('click', closePopup); });
 		document.addEventListener('keydown', function (e) {
@@ -392,7 +438,11 @@
 
 	/* ---------------- the gate ---------------- */
 
-	var gated = D.mode === 'required' || (D.mode === 'optional' && !guestChosen());
+	// Asked on every click, not once: a new customer is let through in the middle of a page's life.
+	function gated() {
+		if (passed()) { return false; }
+		return D.mode === 'required' || (D.mode === 'optional' && !guestChosen());
+	}
 
 	function isCheckoutTrigger(el) {
 		var a = el.closest('a[href]');
@@ -404,10 +454,10 @@
 		return '';
 	}
 
-	if (modal && gated && D.mode !== 'off') {
+	if (modal && D.mode !== 'off') {
 		// Capture phase: before the theme's own handlers send the guest to the checkout.
 		document.addEventListener('click', function (e) {
-			if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey) { return; }
+			if (!gated() || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey) { return; }
 			var to = isCheckoutTrigger(e.target);
 			if (!to) { return; }
 			e.preventDefault();
@@ -415,7 +465,7 @@
 			openPopup(to);
 		}, true);
 
-		if (D.onCheckout) {
+		if (D.onCheckout && gated()) {
 			openPopup(D.checkout);
 		}
 	}

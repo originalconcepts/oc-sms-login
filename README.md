@@ -28,6 +28,19 @@ See [docs/hub-contract.md](docs/hub-contract.md).
 **The gate never blocks a sale:** while a code cannot go out (no licence, an empty balance, a hub
 outage that answers "unavailable"), the gate stands down and the checkout opens to guests as before.
 
+**A new customer** (a number with no account and no past order), setting `new_customer`:
+
+| value | on the way to the checkout |
+|---|---|
+| `details` (default) | first name, last name, email, then a code; the account opens once the number is proven. |
+| `checkout` | no code and no account: straight on to the checkout as a guest, the number already in the phone field. The pass lives in the shopper's WooCommerce session and ends with the order. The next order finds the number in the past orders and asks for a code. |
+
+With `checkout`, `required` no longer means "every order has a proven phone": typing a number the shop
+has never seen is enough to order as a guest. The sign-in block (My Account, a header drawer, the
+shortcode) keeps the details step and the code either way, because there an account opens.
+
+The phone step's button says "המשך" (continue): what comes next depends on the number.
+
 ## Ways out
 
 | transport | when | how |
@@ -57,7 +70,9 @@ outage that answers "unavailable"), the gate stands down and the checkout opens 
 - Nonce on every step; honeypot + time trap on registration.
 - Registering a new number with an email that already has an account is refused (otherwise anyone could
   take over an account by its email with their own phone).
-- Shop staff (`manage_options` / `manage_woocommerce`) never sign in through a phone number.
+- Shop staff (`manage_options` / `manage_woocommerce`) never sign in through a phone number, and are
+  told so before a code goes out. A shop may turn `staff_sms` on ("מנהלים וצוות החנות"); then whoever
+  holds a manager's phone gets into the admin without a password, so it is off by default.
 - The order lookup re-checks the number on the order it found, so an order store that ignored the
   filter can never hand someone else's details to a new account.
 

@@ -39,6 +39,72 @@ class OCSL_Gate {
 		add_action( 'woocommerce_before_customer_login_form', array( __CLASS__, 'account_block' ), 5 );
 		add_shortcode( 'oc_sms_login', array( __CLASS__, 'shortcode' ) );
 		add_filter( 'wp_speculation_rules_href_exclude_paths', array( __CLASS__, 'no_prefetch' ) );
+		// A new customer's pass through the gate ends with the order it was given for.
+		add_action( 'woocommerce_checkout_order_processed', array( __CLASS__, 'drop_pass' ) );
+		add_action( 'woocommerce_store_api_checkout_order_processed', array( __CLASS__, 'drop_pass' ) );
+	}
+
+	/* ---------------- A new customer's pass ---------------- */
+
+	/** The session key that holds the number of a new customer who was let through to the checkout. */
+	const PASS = 'ocsl_guest_phone';
+
+	/**
+	 * May a number the shop has never seen go on to the checkout as a guest, with no code? Only where
+	 * the shop chose so, and only on the way to the checkout: a sign-in block never opens an account
+	 * on a number nobody proved.
+	 *
+	 * @param string $to Where the visitor is heading (already validated as ours).
+	 * @return bool
+	 */
+	public static function guest_may_pass( $to ) {
+		if ( 'checkout' !== OCSL_Settings::get( 'new_customer' ) || 'off' === self::mode() || '' === (string) $to || ! function_exists( 'wc_get_checkout_url' ) ) {
+			return false;
+		}
+		$checkout = (string) wc_get_checkout_url();
+		$path     = function ( $url ) {
+			return untrailingslashit( (string) wp_parse_url( $url, PHP_URL_PATH ) );
+		};
+		$page     = function ( $url ) {
+			$args = array();
+			wp_parse_str( (string) wp_parse_url( $url, PHP_URL_QUERY ), $args );
+			return isset( $args['page_id'] ) ? (string) $args['page_id'] : ''; // Plain permalinks: pages differ by ?page_id=.
+		};
+		return $path( $to ) === $path( $checkout ) && $page( $to ) === $page( $checkout );
+	}
+
+	/**
+	 * Let this visitor through to the checkout as a guest, and put the number in the checkout's
+	 * phone field.
+	 *
+	 * @param string $phone Canonical number.
+	 */
+	public static function grant_pass( $phone ) {
+		if ( ! function_exists( 'WC' ) || ! WC()->session ) {
+			return;
+		}
+		if ( ! WC()->session->has_session() ) {
+			WC()->session->set_customer_session_cookie( true );
+		}
+		WC()->session->set( self::PASS, (string) $phone );
+		if ( WC()->customer ) {
+			WC()->customer->set_billing_phone( (string) $phone );
+			WC()->customer->save();
+		}
+	}
+
+	/** Was this visitor let through as a new customer? */
+	public static function has_pass() {
+		if ( 'checkout' !== OCSL_Settings::get( 'new_customer' ) || ! function_exists( 'WC' ) || ! WC()->session ) {
+			return false;
+		}
+		return '' !== (string) WC()->session->get( self::PASS, '' );
+	}
+
+	public static function drop_pass() {
+		if ( function_exists( 'WC' ) && WC()->session ) {
+			WC()->session->set( self::PASS, '' );
+		}
 	}
 
 	/**
@@ -102,7 +168,7 @@ class OCSL_Gate {
 	}
 
 	public static function body_class( $classes ) {
-		if ( ! is_user_logged_in() && 'off' !== self::mode() && self::on_checkout() ) {
+		if ( ! is_user_logged_in() && 'off' !== self::mode() && self::on_checkout() && ! self::has_pass() ) {
 			$classes[] = 'ocsl-gated';
 			$classes[] = 'ocsl-gated-' . self::mode();
 		}
@@ -132,6 +198,7 @@ class OCSL_Gate {
 	private static function script_data( $gate ) {
 		$s    = OCSL_Settings::all();
 		$mode = $gate ? self::mode() : 'off';
+		$pass = $gate && 'off' !== $mode && self::has_pass();
 		return array(
 			'ajax'       => admin_url( 'admin-ajax.php' ),
 			'nonce'      => wp_create_nonce( OCSL_Auth::NONCE ),
@@ -139,7 +206,8 @@ class OCSL_Gate {
 			'checkout'   => ( $gate && function_exists( 'wc_get_checkout_url' ) ) ? wc_get_checkout_url() : '',
 			'cart'       => ( $gate && function_exists( 'wc_get_cart_url' ) ) ? wc_get_cart_url() : home_url( '/' ),
 			'home'       => home_url( '/' ),
-			'onCheckout' => $gate && 'off' !== $mode && self::on_checkout(),
+			'onCheckout' => $gate && 'off' !== $mode && ! $pass && self::on_checkout(),
+			'pass'       => $pass, // A new customer who was already let through as a guest.
 			'selectors'  => $gate ? trim( (string) $s['open_selectors'] ) : '',
 			'test'       => 'test' === OCSL_Sender::transport(),
 			'expiry'     => (int) $s['code_expiry'],
@@ -150,6 +218,7 @@ class OCSL_Gate {
 				'resendIn'  => 'אפשר לבקש קוד חדש בעוד %s שניות',
 				'resend'    => 'שלחו לי קוד חדש',
 				'signedIn'  => 'נכנסתם! ממשיכים...',
+				'toCheckout' => 'ממשיכים לקופה...',
 				'testCode'  => 'מצב בדיקה: הקוד הוא %s',
 				'gateTitle' => (string) $s['gate_title'],
 				'title'     => (string) $s['title'],
@@ -208,7 +277,7 @@ class OCSL_Gate {
 	 * browser, the server cannot.
 	 */
 	public static function enforce() {
-		if ( is_user_logged_in() || 'required' !== self::mode() ) {
+		if ( is_user_logged_in() || 'required' !== self::mode() || self::has_pass() ) {
 			return;
 		}
 		wc_add_notice( 'כדי להשלים את ההזמנה צריך להתחבר עם מספר הטלפון. רעננו את העמוד והזינו את המספר שלכם.', 'error' );
@@ -222,7 +291,7 @@ class OCSL_Gate {
 	 * @throws \Exception Refuses a guest's order while the gate is required.
 	 */
 	public static function enforce_store_api( $order ) {
-		if ( is_user_logged_in() || 'required' !== self::mode() ) {
+		if ( is_user_logged_in() || 'required' !== self::mode() || self::has_pass() ) {
 			return;
 		}
 		if ( $order instanceof WC_Order && $order->get_customer_id() > 0 ) {
@@ -242,7 +311,9 @@ class OCSL_Gate {
 			return;
 		}
 		self::$needed = true;
-		echo '<div class="ocsl-inline" data-ocsl-inline data-ocsl-to="' . esc_url( wc_get_page_permalink( 'myaccount' ) ) . '">';
+		// No address to go on to: signed in, the visitor stays on the page they were on (this block also
+		// sits in themes' header login drawers, on every page; on My Account that page is the account).
+		echo '<div class="ocsl-inline" data-ocsl-inline data-ocsl-to="">';
 		self::steps( false );
 		echo '<p class="ocsl-or"><span>או כניסה עם אימייל וסיסמה</span></p></div>';
 	}
@@ -280,7 +351,7 @@ class OCSL_Gate {
 		if ( ! self::$needed || is_user_logged_in() || ! OCSL_Sender::available() ) {
 			return;
 		}
-		$locked = 'required' === self::mode();
+		$locked = 'required' === self::mode() && ! self::has_pass();
 		?>
 		<div class="ocsl-modal" id="ocsl-modal" hidden data-ocsl-modal<?php echo $locked ? ' data-ocsl-locked' : ''; ?>>
 			<?php // Required: a stray click beside the box must not throw the typed number away. ?>
@@ -319,7 +390,8 @@ class OCSL_Gate {
 				<label class="ocsl-label" for="<?php echo esc_attr( $uid ); ?>-phone">מספר טלפון נייד</label>
 				<div class="ocsl-row">
 					<input class="ocsl-input ocsl-tel" id="<?php echo esc_attr( $uid ); ?>-phone" type="tel" name="phone" inputmode="tel" autocomplete="tel" placeholder="05X-XXXXXXX" dir="ltr" required>
-					<button type="submit" class="ocsl-btn">שליחת קוד</button>
+					<?php // "Continue", not "send a code": what comes next depends on the number (a code, the details, or the checkout). ?>
+					<button type="submit" class="ocsl-btn">המשך</button>
 				</div>
 				<p class="ocsl-err" role="alert" hidden></p>
 			</form>

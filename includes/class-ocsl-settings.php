@@ -47,6 +47,15 @@ class OCSL_Settings {
 			// account from their last order, so the checkout arrives filled in.
 			'from_orders'     => 1,
 
+			// A number the shop has never seen, on its way to the checkout:
+			//   details   the details step, then a code, and an account opens (the number is proven).
+			//   checkout  straight on to the checkout as a guest: no code, no account.
+			'new_customer'    => 'details',
+
+			// Shop staff (administrators, shop managers) may sign in with a code too. Off: they
+			// sign in through the private login only.
+			'staff_sms'       => 0,
+
 			// The popup's words.
 			'title'           => 'כניסה מהירה עם הטלפון',
 			'subtitle'        => 'נשלח אליכם קוד בן 6 ספרות ב-SMS, ואחרי זה כל הפרטים כבר יחכו לכם בקופה.',
@@ -131,10 +140,13 @@ class OCSL_Settings {
 		if ( isset( $in['gate'] ) ) {
 			$out['gate'] = in_array( $in['gate'], array( 'required', 'optional', 'off' ), true ) ? $in['gate'] : 'required';
 		}
-		foreach ( array( 'myaccount_form', 'from_orders' ) as $k ) {
+		foreach ( array( 'myaccount_form', 'from_orders', 'staff_sms' ) as $k ) {
 			if ( isset( $in['__submitted'] ) ) {
 				$out[ $k ] = empty( $in[ $k ] ) ? 0 : 1;
 			}
+		}
+		if ( isset( $in['new_customer'] ) ) {
+			$out['new_customer'] = in_array( $in['new_customer'], array( 'details', 'checkout' ), true ) ? $in['new_customer'] : 'details';
 		}
 		if ( isset( $in['open_selectors'] ) ) {
 			$out['open_selectors'] = sanitize_text_field( wp_unslash( $in['open_selectors'] ) );

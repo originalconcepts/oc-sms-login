@@ -3,7 +3,9 @@
  * The sign-in engine: four AJAX steps.
  *
  *   start    a phone arrives. An account (or past orders) on it: a code goes
- *            out. A number the shop has never seen: the details step.
+ *            out. A number the shop has never seen: the details step, or,
+ *            where the shop chose so and the visitor is on the way to the
+ *            checkout, straight on to the checkout as a guest (no code).
  *   register first name, last name, email, consent. The details wait while a
  *            code goes out; the account opens only when the code comes back,
  *            so nobody can open an account on somebody else's number.
@@ -86,6 +88,20 @@ class OCSL_Auth {
 
 	private static function phone_from_post() {
 		return OCSL_Phone::normalize( isset( $_POST['phone'] ) ? wp_unslash( $_POST['phone'] ) : '' ); // phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput -- guard() checked it; normalize() keeps digits only.
+	}
+
+	/**
+	 * Shop staff (whoever runs the site or the shop) sign in through the private login, never through
+	 * a number anyone may type, unless the shop turned "staff may sign in with a code" on.
+	 *
+	 * @param mixed $user The account, if any.
+	 * @return bool True when this account may not sign in with a code.
+	 */
+	private static function staff_refused( $user ) {
+		if ( ! $user instanceof WP_User || OCSL_Settings::get( 'staff_sms' ) ) {
+			return false;
+		}
+		return user_can( $user, 'manage_options' ) || user_can( $user, 'manage_woocommerce' );
 	}
 
 	/* ---------------- Rate limits ---------------- */
@@ -238,11 +254,29 @@ class OCSL_Auth {
 			self::fail( 'הכניסה עם SMS לא זמינה כרגע.', array( 'unavailable' => 1 ) );
 		}
 
-		$known = (bool) OCSL_Phone::user( $phone );
+		$user = OCSL_Phone::user( $phone );
+		if ( self::staff_refused( $user ) ) {
+			// Said before a code goes out: no message is spent on a sign-in that cannot happen.
+			self::fail( 'לחשבון הזה נכנסים מעמוד הכניסה של הניהול.' );
+		}
+
+		$known = (bool) $user;
 		if ( ! $known && OCSL_Settings::get( 'from_orders' ) ) {
 			$known = (bool) OCSL_Phone::last_order( $phone );
 		}
 		if ( ! $known && ! is_array( get_transient( 'ocsl_pend_' . $phone ) ) ) {
+			if ( OCSL_Gate::guest_may_pass( self::target() ) ) {
+				// A new customer on the way to the checkout: no code, no account. The checkout opens
+				// for this visitor with the number already in its phone field.
+				OCSL_Gate::grant_pass( $phone );
+				wp_send_json_success(
+					array(
+						'step'  => 'guest',
+						'to'    => self::target(),
+						'phone' => $phone,
+					)
+				);
+			}
 			wp_send_json_success(
 				array(
 					'step'   => 'register',
@@ -353,8 +387,7 @@ class OCSL_Auth {
 		$user    = OCSL_Phone::user( $phone );
 		if ( $user ) {
 			$user_id = (int) $user->ID;
-			if ( user_can( $user, 'manage_options' ) || user_can( $user, 'manage_woocommerce' ) ) {
-				// Shop staff sign in through the private login, never through a number anyone may type.
+			if ( self::staff_refused( $user ) ) {
 				self::fail( 'לחשבון הזה נכנסים מעמוד הכניסה של הניהול.' );
 			}
 		} else {
@@ -426,8 +459,7 @@ class OCSL_Auth {
 		if ( $uid ) {
 			delete_transient( $key );
 			$user = get_user_by( 'id', $uid );
-			$staff = $user instanceof WP_User && ( user_can( $user, 'manage_options' ) || user_can( $user, 'manage_woocommerce' ) );
-			if ( $user instanceof WP_User && ! $staff && get_current_user_id() !== $uid ) {
+			if ( $user instanceof WP_User && ! self::staff_refused( $user ) && get_current_user_id() !== $uid ) {
 				wp_set_current_user( $uid );
 				wp_set_auth_cookie( $uid, true, is_ssl() );
 			}
