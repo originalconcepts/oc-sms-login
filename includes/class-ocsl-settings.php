@@ -47,6 +47,16 @@ class OCSL_Settings {
 			// account from their last order, so the checkout arrives filled in.
 			'from_orders'     => 1,
 
+			// A number the shop has never seen, on its way to the checkout:
+			//   details   the details step, then a code, and an account opens (the number is proven).
+			//   register  the details step, and the account opens at once, with no code; then the
+			//             checkout. The number stays unproven until its first sign-in with a code.
+			'new_customer'    => 'details',
+
+			// Shop staff (administrators, shop managers) may sign in with a code too. Off: they
+			// sign in through the private login only.
+			'staff_sms'       => 0,
+
 			// The popup's words.
 			'title'           => 'כניסה מהירה עם הטלפון',
 			'subtitle'        => 'נשלח אליכם קוד בן 6 ספרות ב-SMS, ואחרי זה כל הפרטים כבר יחכו לכם בקופה.',
@@ -98,6 +108,20 @@ class OCSL_Settings {
 		return array_key_exists( $key, $all ) ? $all[ $key ] : null;
 	}
 
+	/**
+	 * What a new customer on the way to the checkout gets: details | register. "checkout" (0.1.3,
+	 * straight on as a guest) is read as "register".
+	 *
+	 * @return string
+	 */
+	public static function new_customer() {
+		$v = (string) self::get( 'new_customer' );
+		if ( 'checkout' === $v ) {
+			return 'register';
+		}
+		return 'register' === $v ? 'register' : 'details';
+	}
+
 	/** Forget the per-request copy (after a save). */
 	public static function flush() {
 		self::$cache = null;
@@ -131,10 +155,13 @@ class OCSL_Settings {
 		if ( isset( $in['gate'] ) ) {
 			$out['gate'] = in_array( $in['gate'], array( 'required', 'optional', 'off' ), true ) ? $in['gate'] : 'required';
 		}
-		foreach ( array( 'myaccount_form', 'from_orders' ) as $k ) {
+		foreach ( array( 'myaccount_form', 'from_orders', 'staff_sms' ) as $k ) {
 			if ( isset( $in['__submitted'] ) ) {
 				$out[ $k ] = empty( $in[ $k ] ) ? 0 : 1;
 			}
+		}
+		if ( isset( $in['new_customer'] ) ) {
+			$out['new_customer'] = in_array( $in['new_customer'], array( 'details', 'register' ), true ) ? $in['new_customer'] : 'details';
 		}
 		if ( isset( $in['open_selectors'] ) ) {
 			$out['open_selectors'] = sanitize_text_field( wp_unslash( $in['open_selectors'] ) );

@@ -28,6 +28,26 @@ See [docs/hub-contract.md](docs/hub-contract.md).
 **The gate never blocks a sale:** while a code cannot go out (no licence, an empty balance, a hub
 outage that answers "unavailable"), the gate stands down and the checkout opens to guests as before.
 
+**A new customer** (a number with no account and no past order), setting `new_customer`:
+
+| value | on the way to the checkout |
+|---|---|
+| `details` (default) | first name, last name, email, then a code; the account opens once the number is proven. |
+| `register` | first name, last name, email, and the account opens at once, with no code; the customer goes on to the checkout signed in. |
+
+With `register`, the number is not proven. It is kept only as the billing phone (never as `ocsl_phone`,
+which OC ValueCard trusts as a proven number), the account is marked `ocsl_unverified`, and the first
+sign-in with a code on that number signs out every other session of the account. Opening accounts this
+way spends no message, so it has its own cap: 5 an hour per IP. The sign-in block (My Account, a header
+drawer, the shortcode) keeps the code either way. The 0.1.3 value `checkout` reads as `register`.
+
+The phone step's button says "המשך" (continue): what comes next depends on the number. Enter in the
+phone or code field sends the step even where a theme swallows Enter on the whole page.
+
+The theme's own sign-up form (WooCommerce's, in the header drawer or on My Account) is sent in place:
+it is posted to the same page as the browser would post it, and WooCommerce's errors from the answer
+show above the form's button instead of after a page load.
+
 ## Ways out
 
 | transport | when | how |
@@ -57,7 +77,9 @@ outage that answers "unavailable"), the gate stands down and the checkout opens 
 - Nonce on every step; honeypot + time trap on registration.
 - Registering a new number with an email that already has an account is refused (otherwise anyone could
   take over an account by its email with their own phone).
-- Shop staff (`manage_options` / `manage_woocommerce`) never sign in through a phone number.
+- Shop staff (`manage_options` / `manage_woocommerce`) never sign in through a phone number, and are
+  told so before a code goes out. A shop may turn `staff_sms` on ("מנהלים וצוות החנות"); then whoever
+  holds a manager's phone gets into the admin without a password, so it is off by default.
 - The order lookup re-checks the number on the order it found, so an order store that ignored the
   filter can never hand someone else's details to a new account.
 

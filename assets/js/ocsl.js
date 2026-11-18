@@ -135,6 +135,13 @@
 			return;
 		}
 		if (data.step === 'register') {
+			// A new customer on the way to the checkout, where the shop asks for no code: the details
+			// open the account, and the button says where it leads.
+			var regBtn = q('[data-ocsl-step="register"] button[type=submit]', this.root);
+			if (regBtn) {
+				if (!regBtn.getAttribute('data-code-label')) { regBtn.setAttribute('data-code-label', regBtn.textContent); }
+				regBtn.textContent = data.nocode && T.registerGo ? T.registerGo : regBtn.getAttribute('data-code-label');
+			}
 			this.step('register');
 			return;
 		}
@@ -253,13 +260,30 @@
 	Box.prototype.bind = function () {
 		var self = this, root = this.root;
 
+		/*
+		 * Enter in a field sends its step. The browser would do that by itself, but themes and shop
+		 * plugins listen for Enter on the whole page and swallow it (so a stray Enter never posts a
+		 * cart or a checkout form), and our box lives inside their page, drawers and checkout.
+		 */
+		root.addEventListener('keydown', function (e) {
+			if (e.key !== 'Enter' || e.isComposing || e.shiftKey || e.ctrlKey || e.altKey || e.metaKey) { return; }
+			var field = e.target;
+			if (!field || field.tagName !== 'INPUT' || field.type === 'checkbox') { return; }
+			var form = field.closest('form[data-ocsl-step]');
+			if (!form || !root.contains(form)) { return; }
+			e.preventDefault();
+			e.stopPropagation();
+			if (form.getAttribute('data-ocsl-step') === 'code') { self.submitCode(); return; }
+			form.dispatchEvent(new Event('submit', { cancelable: true }));
+		});
+
 		q('[data-ocsl-step="phone"]', root).addEventListener('submit', function (e) {
 			e.preventDefault();
 			if (self.busy) { return; }
 			var form = this;
 			self.phone = q('input[name=phone]', form).value;
 			if (self.phone.replace(/\D/g, '').length < 9) { self.error('phone', 'הזינו מספר טלפון נייד.'); return; }
-			self.lock(form, true);
+			self.lock(form, true, T.checking);
 			post('start', { phone: self.phone, to: self.to }).then(function (res) {
 				self.lock(form, false);
 				self.answer(res, 'phone');
@@ -392,7 +416,9 @@
 
 	/* ---------------- the gate ---------------- */
 
-	var gated = D.mode === 'required' || (D.mode === 'optional' && !guestChosen());
+	function gated() {
+		return D.mode === 'required' || (D.mode === 'optional' && !guestChosen());
+	}
 
 	function isCheckoutTrigger(el) {
 		var a = el.closest('a[href]');
@@ -404,10 +430,10 @@
 		return '';
 	}
 
-	if (modal && gated && D.mode !== 'off') {
+	if (modal && D.mode !== 'off') {
 		// Capture phase: before the theme's own handlers send the guest to the checkout.
 		document.addEventListener('click', function (e) {
-			if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey) { return; }
+			if (!gated() || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey) { return; }
 			var to = isCheckoutTrigger(e.target);
 			if (!to) { return; }
 			e.preventDefault();
@@ -415,7 +441,7 @@
 			openPopup(to);
 		}, true);
 
-		if (D.onCheckout) {
+		if (D.onCheckout && gated()) {
 			openPopup(D.checkout);
 		}
 	}
@@ -498,6 +524,79 @@
 			sync();
 		}
 	}
+
+	/*
+	 * The theme's own sign-up form (WooCommerce's register form, in the header drawer or on My
+	 * Account) is sent in place: its errors appear inside the form instead of after a page load that
+	 * prints them somewhere in the middle of the page. WooCommerce still does the work: the form is
+	 * posted to this same page exactly as the browser would post it, and the answer is read for
+	 * WooCommerce's errors, or for a signed-in page.
+	 */
+	function inPlaceRegister(form) {
+		if (form.getAttribute('data-ocsl-ajax')) { return; }
+		form.setAttribute('data-ocsl-ajax', '1');
+		var btn = q('button[type=submit], input[type=submit]', form);
+		var msg = document.createElement('p');
+		msg.className = 'ocsl-err ocsl-reg-err';
+		msg.setAttribute('role', 'alert');
+		msg.hidden = true;
+		var row = btn ? btn.closest('p, .form-row, div') : null;
+		if (row && row.parentNode === form) { form.insertBefore(msg, row); } else if (btn && btn.parentNode) { btn.parentNode.insertBefore(msg, btn); } else { form.appendChild(msg); }
+		var busy = false;
+
+		function say(text) { msg.textContent = text || ''; msg.hidden = !text; }
+		function lock(on) {
+			busy = on;
+			if (!btn) { return; }
+			if (on) { btn.setAttribute('data-label', btn.textContent || btn.value); }
+			var label = on ? 'נרשמים...' : btn.getAttribute('data-label');
+			if (btn.tagName === 'INPUT') { btn.value = label; } else { btn.textContent = label; }
+			btn.disabled = on;
+		}
+		// Every field the visitor can see is needed (themes add names and a second password).
+		function firstEmpty() {
+			return qa('input[type=text], input[type=email], input[type=password], input[type=tel]', form).filter(function (f) {
+				return f.offsetParent && f.name !== 'website' && f.value.trim() === '';
+			})[0] || null;
+		}
+
+		form.addEventListener('submit', function (e) {
+			e.preventDefault();
+			e.stopImmediatePropagation();
+			if (busy) { return; }
+			say('');
+			var empty = firstEmpty();
+			if (empty) { say('צריך למלא את כל השדות.'); empty.focus(); return; }
+			var email = q('[name="email"]', form);
+			if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value.trim())) { say('הזינו כתובת אימייל תקינה.'); email.focus(); return; }
+			var pw = qa('input[type=password]', form).filter(function (f) { return f.offsetParent; });
+			if (pw.length === 2 && pw[0].value !== pw[1].value) { say('הסיסמאות לא זהות.'); pw[1].focus(); return; }
+
+			var data = new FormData(form);
+			if (btn && btn.name && !data.has(btn.name)) { data.append(btn.name, btn.value || '1'); }
+			if (!data.has('register')) { data.append('register', '1'); }
+			lock(true);
+			fetch(location.href, { method: 'POST', body: data, credentials: 'same-origin' })
+				.then(function (r) { return r.text(); })
+				.then(function (html) {
+					var doc = new DOMParser().parseFromString(html, 'text/html');
+					var seen = {};
+					var errs = qa('.woocommerce-error:not(.hidden-notice) li, .woocommerce-error:not(.hidden-notice):not(ul)', doc)
+						.map(function (el) { return el.textContent.replace(/\s+/g, ' ').trim(); })
+						.filter(function (t) { if (!t || seen[t]) { return false; } seen[t] = 1; return true; });
+					if (errs.length) { lock(false); say(errs.join(' ')); return; }
+					if (doc.body && /(^|\s)logged-in(\s|$)/.test(doc.body.className)) {
+						try { sessionStorage.setItem(SIGNED_KEY, String(Date.now())); } catch (err) {}
+						location.reload();
+						return;
+					}
+					lock(false);
+					say(T.error);
+				})
+				.catch(function () { lock(false); say(T.error); });
+		}, true);
+	}
+	qa('form.woocommerce-form-register').forEach(inPlaceRegister);
 
 	qa('[data-ocsl-inline]').forEach(function (el) {
 		drawerize(el);

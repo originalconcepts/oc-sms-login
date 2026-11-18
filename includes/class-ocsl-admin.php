@@ -185,6 +185,21 @@ class OCSL_Admin {
 						</td>
 					</tr>
 					<tr>
+						<th scope="row">לקוח חדש בדרך לקופה</th>
+						<td>
+							<?php
+							$news = array(
+								'details'  => 'ממלא שם ואימייל, מקבל קוד, ונפתח לו חשבון (המספר מאומת)',
+								'register' => 'ממלא שם ואימייל, נפתח לו חשבון מיד בלי קוד, וממשיך לקופה מחובר',
+							);
+							foreach ( $news as $v => $label ) :
+								?>
+								<label style="display:block;margin:0 0 6px"><input type="radio" name="<?php echo esc_attr( $f( 'new_customer' ) ); ?>" value="<?php echo esc_attr( $v ); ?>" <?php checked( OCSL_Settings::new_customer(), $v ); ?>> <?php echo esc_html( $label ); ?></label>
+							<?php endforeach; ?>
+							<p class="description">לקוח חדש = מספר שאין לו חשבון וגם לא הזמנה קודמת. באפשרות השנייה לא נשלחת לו הודעה, ובכניסה הבאה עם המספר הוא כבר יקבל קוד. המספר נשאר לא מאומת עד אז: הוא לא מועבר למועדון הלקוחות, וכשבעל המספר נכנס בפעם הראשונה עם קוד, כל חיבור אחר לחשבון מתנתק. בפאנל הכניסה ובעמוד החשבון לקוח חדש תמיד מקבל קוד.</p>
+						</td>
+					</tr>
+					<tr>
 						<th scope="row">לקוחות שהזמינו כאורחים</th>
 						<td><label><input type="checkbox" name="<?php echo esc_attr( $f( 'from_orders' ) ); ?>" value="1" <?php checked( $s['from_orders'] ); ?>> לזהות לפי ההזמנות הקודמות ולפתוח להם חשבון מההזמנה האחרונה (הקופה מגיעה ממולאת)</label></td>
 					</tr>
@@ -196,6 +211,11 @@ class OCSL_Admin {
 						<th scope="row"><label for="ocsl-sel">פתיחת הכניסה גם מ...</label></th>
 						<td><input id="ocsl-sel" class="regular-text code" dir="ltr" name="<?php echo esc_attr( $f( 'open_selectors' ) ); ?>" value="<?php echo esc_attr( $s['open_selectors'] ); ?>" placeholder=".header-account a">
 							<p class="description">בוררי CSS מופרדים בפסיק, למשל אייקון החשבון בכותרת. לחיצה של אורח עליהם פותחת את חלון הכניסה.</p></td>
+					</tr>
+					<tr>
+						<th scope="row">מנהלים וצוות החנות</th>
+						<td><label><input type="checkbox" name="<?php echo esc_attr( $f( 'staff_sms' ) ); ?>" value="1" <?php checked( $s['staff_sms'] ); ?>> לאפשר גם למנהלי האתר ולמנהלי החנות להיכנס עם קוד SMS</label>
+							<p class="description">כבוי (מומלץ): חשבונות ניהול נכנסים רק מעמוד הכניסה של הניהול, עם סיסמה. דלוק: מי שמחזיק בטלפון של מנהל, או מקבל את ההודעות שלו, נכנס לניהול האתר בלי סיסמה.</p></td>
 					</tr>
 				</table>
 
@@ -281,7 +301,7 @@ class OCSL_Admin {
 										<span class="ocsl-label">מספר טלפון נייד</span>
 										<div class="ocsl-row">
 											<input class="ocsl-input ocsl-tel" type="tel" placeholder="05X-XXXXXXX" dir="ltr" tabindex="-1">
-											<button type="button" class="ocsl-btn" tabindex="-1">שליחת קוד</button>
+											<button type="button" class="ocsl-btn" tabindex="-1">המשך</button>
 										</div>
 									</div>
 								</div>
