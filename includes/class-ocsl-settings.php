@@ -49,7 +49,8 @@ class OCSL_Settings {
 
 			// A number the shop has never seen, on its way to the checkout:
 			//   details   the details step, then a code, and an account opens (the number is proven).
-			//   checkout  straight on to the checkout as a guest: no code, no account.
+			//   register  the details step, and the account opens at once, with no code; then the
+			//             checkout. The number stays unproven until its first sign-in with a code.
 			'new_customer'    => 'details',
 
 			// Shop staff (administrators, shop managers) may sign in with a code too. Off: they
@@ -107,6 +108,20 @@ class OCSL_Settings {
 		return array_key_exists( $key, $all ) ? $all[ $key ] : null;
 	}
 
+	/**
+	 * What a new customer on the way to the checkout gets: details | register. "checkout" (0.1.3,
+	 * straight on as a guest) is read as "register".
+	 *
+	 * @return string
+	 */
+	public static function new_customer() {
+		$v = (string) self::get( 'new_customer' );
+		if ( 'checkout' === $v ) {
+			return 'register';
+		}
+		return 'register' === $v ? 'register' : 'details';
+	}
+
 	/** Forget the per-request copy (after a save). */
 	public static function flush() {
 		self::$cache = null;
@@ -146,7 +161,7 @@ class OCSL_Settings {
 			}
 		}
 		if ( isset( $in['new_customer'] ) ) {
-			$out['new_customer'] = in_array( $in['new_customer'], array( 'details', 'checkout' ), true ) ? $in['new_customer'] : 'details';
+			$out['new_customer'] = in_array( $in['new_customer'], array( 'details', 'register' ), true ) ? $in['new_customer'] : 'details';
 		}
 		if ( isset( $in['open_selectors'] ) ) {
 			$out['open_selectors'] = sanitize_text_field( wp_unslash( $in['open_selectors'] ) );

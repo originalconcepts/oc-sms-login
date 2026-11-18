@@ -190,13 +190,13 @@ class OCSL_Admin {
 							<?php
 							$news = array(
 								'details'  => 'ממלא שם ואימייל, מקבל קוד, ונפתח לו חשבון (המספר מאומת)',
-								'checkout' => 'ממשיך ישר לקופה כאורח, בלי קוד ובלי חשבון',
+								'register' => 'ממלא שם ואימייל, נפתח לו חשבון מיד בלי קוד, וממשיך לקופה מחובר',
 							);
 							foreach ( $news as $v => $label ) :
 								?>
-								<label style="display:block;margin:0 0 6px"><input type="radio" name="<?php echo esc_attr( $f( 'new_customer' ) ); ?>" value="<?php echo esc_attr( $v ); ?>" <?php checked( $s['new_customer'], $v ); ?>> <?php echo esc_html( $label ); ?></label>
+								<label style="display:block;margin:0 0 6px"><input type="radio" name="<?php echo esc_attr( $f( 'new_customer' ) ); ?>" value="<?php echo esc_attr( $v ); ?>" <?php checked( OCSL_Settings::new_customer(), $v ); ?>> <?php echo esc_html( $label ); ?></label>
 							<?php endforeach; ?>
-							<p class="description">לקוח חדש = מספר שאין לו חשבון וגם לא הזמנה קודמת. באפשרות השנייה לא נשלחת לו הודעה, המספר ממלא את שדה הטלפון בקופה, ובהזמנה הבאה שלו הוא כבר יזוהה ויקבל קוד. שימו לב: כך גם בשער "חובה" מי שמקליד מספר לא מוכר מזמין בלי אימות.</p>
+							<p class="description">לקוח חדש = מספר שאין לו חשבון וגם לא הזמנה קודמת. באפשרות השנייה לא נשלחת לו הודעה, ובכניסה הבאה עם המספר הוא כבר יקבל קוד. המספר נשאר לא מאומת עד אז: הוא לא מועבר למועדון הלקוחות, וכשבעל המספר נכנס בפעם הראשונה עם קוד, כל חיבור אחר לחשבון מתנתק. בפאנל הכניסה ובעמוד החשבון לקוח חדש תמיד מקבל קוד.</p>
 						</td>
 					</tr>
 					<tr>

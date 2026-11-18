@@ -33,13 +33,20 @@ outage that answers "unavailable"), the gate stands down and the checkout opens 
 | value | on the way to the checkout |
 |---|---|
 | `details` (default) | first name, last name, email, then a code; the account opens once the number is proven. |
-| `checkout` | no code and no account: straight on to the checkout as a guest, the number already in the phone field. The pass lives in the shopper's WooCommerce session and ends with the order. The next order finds the number in the past orders and asks for a code. |
+| `register` | first name, last name, email, and the account opens at once, with no code; the customer goes on to the checkout signed in. |
 
-With `checkout`, `required` no longer means "every order has a proven phone": typing a number the shop
-has never seen is enough to order as a guest. The sign-in block (My Account, a header drawer, the
-shortcode) keeps the details step and the code either way, because there an account opens.
+With `register`, the number is not proven. It is kept only as the billing phone (never as `ocsl_phone`,
+which OC ValueCard trusts as a proven number), the account is marked `ocsl_unverified`, and the first
+sign-in with a code on that number signs out every other session of the account. Opening accounts this
+way spends no message, so it has its own cap: 5 an hour per IP. The sign-in block (My Account, a header
+drawer, the shortcode) keeps the code either way. The 0.1.3 value `checkout` reads as `register`.
 
-The phone step's button says "המשך" (continue): what comes next depends on the number.
+The phone step's button says "המשך" (continue): what comes next depends on the number. Enter in the
+phone or code field sends the step even where a theme swallows Enter on the whole page.
+
+The theme's own sign-up form (WooCommerce's, in the header drawer or on My Account) is sent in place:
+it is posted to the same page as the browser would post it, and WooCommerce's errors from the answer
+show above the form's button instead of after a page load.
 
 ## Ways out
 

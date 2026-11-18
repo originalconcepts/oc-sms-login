@@ -11,7 +11,6 @@
 	if (!D) { return; }
 	var T = D.i18n || {};
 	var GUEST_KEY = 'ocsl_guest';
-	var NEW_KEY = 'ocsl_new';
 	var SIGNED_KEY = 'ocsl_signed_in';
 
 	/*
@@ -69,20 +68,6 @@
 
 	function guestChosen() {
 		try { return sessionStorage.getItem(GUEST_KEY) === '1'; } catch (e) { return false; }
-	}
-
-	/*
-	 * A new customer (a number the shop has never seen) whom the server let through to the checkout
-	 * as a guest. The server remembers it in the shopper's session and says so (D.pass); this tab
-	 * remembers it too, for pages that came from a cache. On the checkout itself the server's word is
-	 * the only one: a checkout that still asks for the phone means the pass is gone.
-	 */
-	if (D.onCheckout) {
-		try { sessionStorage.removeItem(NEW_KEY); } catch (e) {}
-	}
-	function passed() {
-		if (D.pass) { return true; }
-		try { return sessionStorage.getItem(NEW_KEY) === '1'; } catch (e) { return false; }
 	}
 
 	/*
@@ -150,22 +135,14 @@
 			return;
 		}
 		if (data.step === 'register') {
-			this.step('register');
-			return;
-		}
-		if (data.step === 'guest') {
-			// A new customer on the way to the checkout: no code. On to the checkout as a guest.
-			flowClear();
-			try { sessionStorage.setItem(NEW_KEY, '1'); } catch (e) {}
-			var go = data.to || this.to;
-			if (go && !samePage(go, location.href)) {
-				var words = q('[data-ocsl-step="done"] .ocsl-h', this.root);
-				if (words && T.toCheckout) { words.textContent = T.toCheckout; }
-				this.step('done');
-				location.href = go;
-			} else {
-				openGate(data.phone);
+			// A new customer on the way to the checkout, where the shop asks for no code: the details
+			// open the account, and the button says where it leads.
+			var regBtn = q('[data-ocsl-step="register"] button[type=submit]', this.root);
+			if (regBtn) {
+				if (!regBtn.getAttribute('data-code-label')) { regBtn.setAttribute('data-code-label', regBtn.textContent); }
+				regBtn.textContent = data.nocode && T.registerGo ? T.registerGo : regBtn.getAttribute('data-code-label');
 			}
+			this.step('register');
 			return;
 		}
 		if (data.step === 'code') {
@@ -283,6 +260,23 @@
 	Box.prototype.bind = function () {
 		var self = this, root = this.root;
 
+		/*
+		 * Enter in a field sends its step. The browser would do that by itself, but themes and shop
+		 * plugins listen for Enter on the whole page and swallow it (so a stray Enter never posts a
+		 * cart or a checkout form), and our box lives inside their page, drawers and checkout.
+		 */
+		root.addEventListener('keydown', function (e) {
+			if (e.key !== 'Enter' || e.isComposing || e.shiftKey || e.ctrlKey || e.altKey || e.metaKey) { return; }
+			var field = e.target;
+			if (!field || field.tagName !== 'INPUT' || field.type === 'checkbox') { return; }
+			var form = field.closest('form[data-ocsl-step]');
+			if (!form || !root.contains(form)) { return; }
+			e.preventDefault();
+			e.stopPropagation();
+			if (form.getAttribute('data-ocsl-step') === 'code') { self.submitCode(); return; }
+			form.dispatchEvent(new Event('submit', { cancelable: true }));
+		});
+
 		q('[data-ocsl-step="phone"]', root).addEventListener('submit', function (e) {
 			e.preventDefault();
 			if (self.busy) { return; }
@@ -394,22 +388,6 @@
 		if (lastFocus && lastFocus.focus) { lastFocus.focus(); }
 	}
 
-	/** The checkout page, opened in place for a new customer who was let through as a guest. */
-	function openGate(phone) {
-		document.body.classList.remove('ocsl-gated', 'ocsl-gated-required', 'ocsl-gated-optional');
-		if (modal) {
-			modal.removeAttribute('data-ocsl-locked');
-			modal.hidden = true;
-		}
-		document.documentElement.classList.remove('ocsl-open');
-		var tel = q('#billing_phone, input[name="billing_phone"], #billing-phone, #shipping-phone');
-		if (tel && !tel.value && phone) {
-			tel.value = phone;
-			tel.dispatchEvent(new Event('input', { bubbles: true }));
-			tel.dispatchEvent(new Event('change', { bubbles: true }));
-		}
-	}
-
 	if (modal) {
 		qa('[data-ocsl-close]', modal).forEach(function (el) { el.addEventListener('click', closePopup); });
 		document.addEventListener('keydown', function (e) {
@@ -438,9 +416,7 @@
 
 	/* ---------------- the gate ---------------- */
 
-	// Asked on every click, not once: a new customer is let through in the middle of a page's life.
 	function gated() {
-		if (passed()) { return false; }
 		return D.mode === 'required' || (D.mode === 'optional' && !guestChosen());
 	}
 
@@ -548,6 +524,79 @@
 			sync();
 		}
 	}
+
+	/*
+	 * The theme's own sign-up form (WooCommerce's register form, in the header drawer or on My
+	 * Account) is sent in place: its errors appear inside the form instead of after a page load that
+	 * prints them somewhere in the middle of the page. WooCommerce still does the work: the form is
+	 * posted to this same page exactly as the browser would post it, and the answer is read for
+	 * WooCommerce's errors, or for a signed-in page.
+	 */
+	function inPlaceRegister(form) {
+		if (form.getAttribute('data-ocsl-ajax')) { return; }
+		form.setAttribute('data-ocsl-ajax', '1');
+		var btn = q('button[type=submit], input[type=submit]', form);
+		var msg = document.createElement('p');
+		msg.className = 'ocsl-err ocsl-reg-err';
+		msg.setAttribute('role', 'alert');
+		msg.hidden = true;
+		var row = btn ? btn.closest('p, .form-row, div') : null;
+		if (row && row.parentNode === form) { form.insertBefore(msg, row); } else if (btn && btn.parentNode) { btn.parentNode.insertBefore(msg, btn); } else { form.appendChild(msg); }
+		var busy = false;
+
+		function say(text) { msg.textContent = text || ''; msg.hidden = !text; }
+		function lock(on) {
+			busy = on;
+			if (!btn) { return; }
+			if (on) { btn.setAttribute('data-label', btn.textContent || btn.value); }
+			var label = on ? 'נרשמים...' : btn.getAttribute('data-label');
+			if (btn.tagName === 'INPUT') { btn.value = label; } else { btn.textContent = label; }
+			btn.disabled = on;
+		}
+		// Every field the visitor can see is needed (themes add names and a second password).
+		function firstEmpty() {
+			return qa('input[type=text], input[type=email], input[type=password], input[type=tel]', form).filter(function (f) {
+				return f.offsetParent && f.name !== 'website' && f.value.trim() === '';
+			})[0] || null;
+		}
+
+		form.addEventListener('submit', function (e) {
+			e.preventDefault();
+			e.stopImmediatePropagation();
+			if (busy) { return; }
+			say('');
+			var empty = firstEmpty();
+			if (empty) { say('צריך למלא את כל השדות.'); empty.focus(); return; }
+			var email = q('[name="email"]', form);
+			if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value.trim())) { say('הזינו כתובת אימייל תקינה.'); email.focus(); return; }
+			var pw = qa('input[type=password]', form).filter(function (f) { return f.offsetParent; });
+			if (pw.length === 2 && pw[0].value !== pw[1].value) { say('הסיסמאות לא זהות.'); pw[1].focus(); return; }
+
+			var data = new FormData(form);
+			if (btn && btn.name && !data.has(btn.name)) { data.append(btn.name, btn.value || '1'); }
+			if (!data.has('register')) { data.append('register', '1'); }
+			lock(true);
+			fetch(location.href, { method: 'POST', body: data, credentials: 'same-origin' })
+				.then(function (r) { return r.text(); })
+				.then(function (html) {
+					var doc = new DOMParser().parseFromString(html, 'text/html');
+					var seen = {};
+					var errs = qa('.woocommerce-error:not(.hidden-notice) li, .woocommerce-error:not(.hidden-notice):not(ul)', doc)
+						.map(function (el) { return el.textContent.replace(/\s+/g, ' ').trim(); })
+						.filter(function (t) { if (!t || seen[t]) { return false; } seen[t] = 1; return true; });
+					if (errs.length) { lock(false); say(errs.join(' ')); return; }
+					if (doc.body && /(^|\s)logged-in(\s|$)/.test(doc.body.className)) {
+						try { sessionStorage.setItem(SIGNED_KEY, String(Date.now())); } catch (err) {}
+						location.reload();
+						return;
+					}
+					lock(false);
+					say(T.error);
+				})
+				.catch(function () { lock(false); say(T.error); });
+		}, true);
+	}
+	qa('form.woocommerce-form-register').forEach(inPlaceRegister);
 
 	qa('[data-ocsl-inline]').forEach(function (el) {
 		drawerize(el);

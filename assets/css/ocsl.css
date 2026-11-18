@@ -223,3 +223,6 @@ body.ocsl-gated-required .wc-block-checkout { filter: blur(2px); pointer-events:
 
 .ocsl-preview { position: relative; display: flex; align-items: center; justify-content: center; padding: 28px; border-radius: 12px; background: rgba(17, 24, 39, var(--ocsl-overlay)); direction: rtl; }
 .ocsl-preview .ocsl-dialog { animation: none; box-shadow: 0 12px 40px rgba(0, 0, 0, .3); max-height: none; }
+
+/* The theme's sign-up form, sent in place: its errors sit above its button. */
+.ocsl-err.ocsl-reg-err { margin: 0 0 12px !important; }

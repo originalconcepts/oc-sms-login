@@ -3,9 +3,10 @@
  * The sign-in engine: four AJAX steps.
  *
  *   start    a phone arrives. An account (or past orders) on it: a code goes
- *            out. A number the shop has never seen: the details step, or,
- *            where the shop chose so and the visitor is on the way to the
- *            checkout, straight on to the checkout as a guest (no code).
+ *            out. A number the shop has never seen: the details step.
+ *            Where the shop chose so and the visitor is on the way to the
+ *            checkout, the details are all: the account opens with no code
+ *            and the visitor goes on to the checkout (register_now()).
  *   register first name, last name, email, consent. The details wait while a
  *            code goes out; the account opens only when the code comes back,
  *            so nobody can open an account on somebody else's number.
@@ -265,15 +266,13 @@ class OCSL_Auth {
 			$known = (bool) OCSL_Phone::last_order( $phone );
 		}
 		if ( ! $known && ! is_array( get_transient( 'ocsl_pend_' . $phone ) ) ) {
-			if ( OCSL_Gate::guest_may_pass( self::target() ) ) {
-				// A new customer on the way to the checkout: no code, no account. The checkout opens
-				// for this visitor with the number already in its phone field.
-				OCSL_Gate::grant_pass( $phone );
+			if ( OCSL_Gate::register_without_code( self::target() ) ) {
+				// A new customer on the way to the checkout: the details, and no code after them.
 				wp_send_json_success(
 					array(
-						'step'  => 'guest',
-						'to'    => self::target(),
-						'phone' => $phone,
+						'step'   => 'register',
+						'nocode' => 1,
+						'pretty' => OCSL_Phone::pretty( $phone ),
 					)
 				);
 			}
@@ -329,6 +328,10 @@ class OCSL_Auth {
 			self::fail( 'הכניסה עם SMS לא זמינה כרגע.', array( 'unavailable' => 1 ) );
 		}
 
+		if ( OCSL_Gate::register_without_code( self::target() ) && ! ( OCSL_Settings::get( 'from_orders' ) && OCSL_Phone::last_order( $phone ) ) ) {
+			self::register_now( $phone, $first, $last, $email );
+		}
+
 		$res = self::issue( $phone );
 		if ( is_wp_error( $res ) ) {
 			self::fail( $res->get_error_message() );
@@ -343,6 +346,60 @@ class OCSL_Auth {
 			max( 15 * MINUTE_IN_SECONDS, (int) OCSL_Settings::get( 'code_expiry' ) )
 		);
 		wp_send_json_success( $res );
+	}
+
+	/**
+	 * A new customer on the way to the checkout, where the shop chose "no code": the account opens
+	 * now and the customer goes on to the checkout signed in.
+	 *
+	 * The number is not proven, so it is kept only as the billing phone (OCSL_Phone::META, which
+	 * other plugins trust, is written by verify() alone) and the account is marked unverified. The
+	 * first sign-in with a code on this number ends every other session of the account, so whoever
+	 * typed somebody else's number keeps nothing once the number's owner signs in.
+	 *
+	 * @param string $phone Canonical number.
+	 * @param string $first First name.
+	 * @param string $last  Last name.
+	 * @param string $email Email (checked: valid and not taken).
+	 */
+	private static function register_now( $phone, $first, $last, $email ) {
+		// No message is spent here, so the SMS caps do not count it: a cap of its own, per IP.
+		$key = 'ocsl_reg_' . md5( self::ip() );
+		if ( self::counted( $key ) >= 5 ) {
+			self::fail( 'יותר מדי הרשמות מהרשת הזאת. נסו שוב בעוד שעה בערך.' );
+		}
+		$user_id = self::open_account(
+			$phone,
+			array(
+				'first' => $first,
+				'last'  => $last,
+				'email' => $email,
+			),
+			null
+		);
+		if ( ! $user_id ) {
+			self::fail( 'לא הצלחנו לפתוח חשבון. נסו שוב בעוד רגע.' );
+		}
+		self::bump( $key );
+		update_user_meta( $user_id, 'ocsl_unverified', 1 );
+		update_user_meta( $user_id, 'ocsl_opened', 'register-nocode' );
+		self::sign_in( $user_id );
+
+		/**
+		 * A new customer opened an account with a number that was not proven by a code.
+		 *
+		 * @param int    $user_id The account.
+		 * @param string $phone   The number they typed, 05XXXXXXXX.
+		 */
+		do_action( 'ocsl_registered_unverified', $user_id, $phone );
+
+		wp_send_json_success(
+			array(
+				'step'    => 'done',
+				'to'      => self::target(),
+				'handoff' => self::handoff( $user_id ),
+			)
+		);
 	}
 
 	public static function resend() {
@@ -404,6 +461,12 @@ class OCSL_Auth {
 			}
 		}
 
+		if ( get_user_meta( $user_id, 'ocsl_unverified', true ) ) {
+			// The account opened without a code (register_now()). The number's owner has just proven
+			// it: whoever opened the account, and may still be signed in to it, is signed out.
+			WP_Session_Tokens::get_instance( $user_id )->destroy_all();
+			delete_user_meta( $user_id, 'ocsl_unverified' );
+		}
 		update_user_meta( $user_id, OCSL_Phone::META, $phone );
 		self::fill_from_last_order( $user_id, $phone );
 		self::sign_in( $user_id );
