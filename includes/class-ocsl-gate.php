@@ -29,6 +29,9 @@ class OCSL_Gate {
 	/** @var bool Whether the popup markup is needed on this page. */
 	private static $needed = false;
 
+	/** @var int The output buffer level holding the theme's email and password forms, 0 when none is open. */
+	private static $forms_level = 0;
+
 	public static function boot() {
 		add_action( 'wp_enqueue_scripts', array( __CLASS__, 'assets' ) );
 		add_action( 'wp_footer', array( __CLASS__, 'popup' ), 5 ); // Before the footer scripts (priority 20) run.
@@ -37,6 +40,11 @@ class OCSL_Gate {
 		// The checkout block places its orders through the Store API, which never fires the hook above.
 		add_action( 'woocommerce_store_api_checkout_update_order_from_request', array( __CLASS__, 'enforce_store_api' ), 1 );
 		add_action( 'woocommerce_before_customer_login_form', array( __CLASS__, 'account_block' ), 5 );
+		// After everything else printed above the forms (WooCommerce's notices at 10), before anything printed under them.
+		add_action( 'woocommerce_before_customer_login_form', array( __CLASS__, 'email_forms_start' ), PHP_INT_MAX );
+		add_action( 'woocommerce_after_customer_login_form', array( __CLASS__, 'email_forms_end' ), -PHP_INT_MAX );
+		// A theme whose login template lost the closing hook: the end of the template itself closes the buffer.
+		add_action( 'woocommerce_after_template_part', array( __CLASS__, 'email_forms_template_end' ), -PHP_INT_MAX );
 		add_shortcode( 'oc_sms_login', array( __CLASS__, 'shortcode' ) );
 		add_filter( 'wp_speculation_rules_href_exclude_paths', array( __CLASS__, 'no_prefetch' ) );
 	}
@@ -149,6 +157,11 @@ class OCSL_Gate {
 		wp_localize_script( 'ocsl', 'ocslData', self::script_data( true ) );
 	}
 
+	/** Does the sign-in page offer WooCommerce's email and password form under the phone? */
+	public static function email_login() {
+		return (bool) OCSL_Settings::get( 'email_login' );
+	}
+
 	/**
 	 * What the script needs to know.
 	 *
@@ -168,6 +181,7 @@ class OCSL_Gate {
 			'onCheckout' => $gate && 'off' !== $mode && self::on_checkout(),
 			'selectors'  => $gate ? trim( (string) $s['open_selectors'] ) : '',
 			'test'       => 'test' === OCSL_Sender::transport(),
+			'emailLogin' => self::email_login(),
 			'expiry'     => (int) $s['code_expiry'],
 			'i18n'       => array(
 				'sending'   => 'שולחים...',
@@ -192,17 +206,13 @@ class OCSL_Gate {
 	 * @return string
 	 */
 	public static function css_vars( $s = null ) {
-		$s      = is_array( $s ) ? $s : OCSL_Settings::all();
-		$shapes = array(
-			'soft'   => array( '10px', '10px' ),
-			'round'  => array( '999px', '24px' ),
-			'square' => array( '0px', '0px' ),
-		);
-		$shape  = isset( $shapes[ $s['btn_shape'] ] ) ? $shapes[ $s['btn_shape'] ] : $shapes['soft'];
-		$vars   = array(
-			'--ocsl-radius'       => (int) $s['radius'] . 'px',
-			'--ocsl-btn-radius'   => $shape[0],
-			'--ocsl-field-radius' => $shape[1],
+		$s    = is_array( $s ) ? $s : OCSL_Settings::all();
+		$look = self::corners( $s );
+		$vars = array(
+			'--ocsl-radius'       => $look[0],
+			'--ocsl-btn-radius'   => $look[1],
+			'--ocsl-field-radius' => $look[2],
+			'--ocsl-x-radius'     => $look[3],
 			'--ocsl-overlay'      => (string) round( (int) $s['overlay'] / 100, 2 ),
 		);
 		foreach ( array( 'brand_color' => '--ocsl-brand', 'btn_text_color' => '--ocsl-btn-ink', 'popup_bg' => '--ocsl-bg', 'text_color' => '--ocsl-ink' ) as $k => $var ) {
@@ -215,6 +225,37 @@ class OCSL_Gate {
 			$out .= $k . ':' . $v . ';';
 		}
 		return $out;
+	}
+
+	/**
+	 * The shape of buttons and boxes: the corners of a window, a button, a field and the close button.
+	 *
+	 * @param array  $s      Settings.
+	 * @param string $choice A choice to read instead of the saved one (the preview in the settings).
+	 * @return string[]
+	 */
+	public static function corners( $s, $choice = '' ) {
+		$looks  = array(
+			'square' => array( '0px', '0px', '0px', '0px' ),
+			'soft'   => array( '16px', '10px', '10px', '50%' ),
+			'round'  => array( '24px', '999px', '24px', '50%' ),
+		);
+		$choice = '' !== $choice ? $choice : ( isset( $s['corners'] ) ? (string) $s['corners'] : '' );
+		if ( isset( $looks[ $choice ] ) ) {
+			return $looks[ $choice ];
+		}
+		if ( 'custom' !== $choice ) {
+			return $looks['square'];
+		}
+		// The look a shop set before 0.1.6: the popup's corners in px, and one of three shapes for buttons and fields.
+		$shapes = array(
+			'soft'   => array( '10px', '10px' ),
+			'round'  => array( '999px', '24px' ),
+			'square' => array( '0px', '0px' ),
+		);
+		$shape  = isset( $s['btn_shape'], $shapes[ $s['btn_shape'] ] ) ? $shapes[ $s['btn_shape'] ] : $shapes['soft'];
+		$radius = isset( $s['radius'] ) ? max( 0, min( 28, (int) $s['radius'] ) ) : 16;
+		return array( $radius . 'px', $shape[0], $shape[1], '50%' );
 	}
 
 	/** The words of the theme's sign-in drawer, for the script that dresses it. */
@@ -270,11 +311,68 @@ class OCSL_Gate {
 			return;
 		}
 		self::$needed = true;
+		$email        = self::email_login();
 		// No address to go on to: signed in, the visitor stays on the page they were on (this block also
 		// sits in themes' header login drawers, on every page; on My Account that page is the account).
-		echo '<div class="ocsl-inline" data-ocsl-inline data-ocsl-to="">';
+		echo '<div class="ocsl-inline ocsl-account' . ( $email ? '' : ' ocsl-only' ) . '" data-ocsl-inline data-ocsl-to="">';
 		self::steps( false );
-		echo '<p class="ocsl-or"><span>או כניסה עם אימייל וסיסמה</span></p></div>';
+		if ( $email ) {
+			echo '<p class="ocsl-or"><span>או כניסה עם אימייל וסיסמה</span></p>';
+		}
+		echo '</div>';
+	}
+
+	/**
+	 * The shop shows the phone sign-in alone ("להציג כניסה עם אימייל וסיסמה" is off): what the theme
+	 * prints between WooCommerce's two hooks, its email and password form, is held back.
+	 *
+	 * Only where our block was just printed above it: while a code cannot go out, or with the block
+	 * switched off, the email form is the only way in and always shows.
+	 */
+	public static function email_forms_start() {
+		if ( self::email_login() || 0 !== self::$forms_level ) {
+			return;
+		}
+		if ( is_user_logged_in() || ! OCSL_Settings::get( 'myaccount_form' ) || ! OCSL_Sender::available() ) {
+			return;
+		}
+		if ( ob_start() ) {
+			self::$forms_level = ob_get_level();
+		}
+	}
+
+	/**
+	 * The end of the theme's forms. With no sign-up form among them, nothing of them is printed. A
+	 * sign-up form stays (the shop opened registration on this page): then the forms are printed as
+	 * they are, and the stylesheet hides the sign-in column beside it (.ocsl-only ~ ...).
+	 *
+	 * A theme whose template never reaches this hook is closed at the end of the template instead
+	 * (email_forms_template_end()).
+	 */
+	public static function email_forms_end() {
+		if ( 0 === self::$forms_level ) {
+			return;
+		}
+		$level             = self::$forms_level;
+		self::$forms_level = 0;
+		if ( ob_get_level() !== $level ) {
+			return; // Somebody opened or closed a buffer in between: leave the page alone.
+		}
+		$forms = (string) ob_get_clean();
+		if ( false !== strpos( $forms, 'woocommerce-form-register' ) || preg_match( '/name=["\']register["\']/', $forms ) ) {
+			echo $forms; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- the theme's own output, held for a moment.
+		}
+	}
+
+	/**
+	 * The login template is over: whatever is still held back ends here.
+	 *
+	 * @param string $template_name The WooCommerce template that just ended.
+	 */
+	public static function email_forms_template_end( $template_name ) {
+		if ( 'myaccount/form-login.php' === $template_name ) {
+			self::email_forms_end();
+		}
 	}
 
 	/**
@@ -292,6 +390,7 @@ class OCSL_Gate {
 			$url = plugin_dir_url( OCSL_FILE );
 			wp_enqueue_style( 'ocsl', $url . 'assets/css/ocsl.css', array(), self::ver( 'assets/css/ocsl.css' ) );
 			wp_enqueue_script( 'ocsl', $url . 'assets/js/ocsl.js', array(), self::ver( 'assets/js/ocsl.js' ), true );
+			wp_add_inline_style( 'ocsl', ':root{' . self::css_vars() . '}' ); // The shop's colours and corners, on a page only the shortcode brought us to.
 			wp_localize_script( 'ocsl', 'ocslData', self::script_data( false ) );
 		}
 		self::$needed = true;

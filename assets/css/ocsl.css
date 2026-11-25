@@ -9,9 +9,12 @@
 	--ocsl-field-bg: #f6f6f7;
 	--ocsl-field-ink: #1f2937; /* the fields stay white, so their text stays dark whatever the popup's text colour is */
 	--ocsl-err: #b42318;
-	--ocsl-radius: 16px;
-	--ocsl-btn-radius: 10px;
-	--ocsl-field-radius: 10px;
+	/* The shape of buttons and boxes, one choice in the settings (square, a little rounded, fully rounded):
+	   the corners of a window, a button, a field, and the close button. */
+	--ocsl-radius: 0px;
+	--ocsl-btn-radius: 0px;
+	--ocsl-field-radius: 0px;
+	--ocsl-x-radius: 0px;
 	--ocsl-overlay: .55;
 }
 
@@ -34,12 +37,12 @@ html.ocsl-open { overflow: hidden; }
 @keyframes ocsl-in { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .ocsl-dialog { animation: none; } }
 
-/* The close button: a round, outlined button in the corner. Themes style every <button>, hence the !important. */
+/* The close button: an outlined button in the corner, round unless the shop chose square corners. Themes style every <button>, hence the !important. */
 .ocsl-dialog button.ocsl-x {
 	position: absolute !important; top: 16px !important; left: 16px !important; right: auto !important;
 	width: 36px !important; height: 36px !important; min-width: 0 !important; min-height: 0 !important; padding: 0 !important; margin: 0 !important;
 	display: flex !important; align-items: center; justify-content: center;
-	border: 1px solid var(--ocsl-line) !important; border-radius: 50% !important; background: var(--ocsl-bg) !important; box-shadow: none !important;
+	border: 1px solid var(--ocsl-line) !important; border-radius: var(--ocsl-x-radius) !important; background: var(--ocsl-bg) !important; box-shadow: none !important;
 	color: var(--ocsl-ink) !important; font-size: 0 !important; line-height: 1 !important; cursor: pointer; transition: background-color .15s, border-color .15s;
 }
 /* The x is drawn with two lines, not a glyph: some themes give buttons an icon font without one. */
@@ -101,8 +104,8 @@ html.ocsl-open { overflow: hidden; }
 .ocsl-sub .ocsl-link { margin-inline-start: 6px !important; }
 .ocsl-pretty { font-weight: 700; color: var(--ocsl-ink); }
 
-.ocsl-err { margin: 10px 0 0 !important; padding: 10px 12px; border-radius: 8px; background: #fef3f2; color: var(--ocsl-err); font-size: 14px; line-height: 1.45; }
-.ocsl-test { padding: 8px 12px; border-radius: 8px; background: #fffbeb; border: 1px dashed #d97706; color: #92400e; font-size: 14px; font-weight: 700; }
+.ocsl-err { margin: 10px 0 0 !important; padding: 10px 12px; border-radius: min(var(--ocsl-field-radius), 8px); background: #fef3f2; color: var(--ocsl-err); font-size: 14px; line-height: 1.45; }
+.ocsl-test { padding: 8px 12px; border-radius: min(var(--ocsl-field-radius), 8px); background: #fffbeb; border: 1px dashed #d97706; color: #92400e; font-size: 14px; font-weight: 700; }
 
 .ocsl-boxes { display: flex; gap: 8px; justify-content: center; margin: 4px 0 16px; direction: ltr; }
 .ocsl-steps .ocsl-box {
@@ -142,6 +145,23 @@ html.ocsl-open { overflow: hidden; }
 .ocsl-or { display: flex; align-items: center; gap: 12px; margin: 22px 0 0 !important; color: var(--ocsl-muted); font-size: 13.5px; }
 .ocsl-or::before, .ocsl-or::after { content: ""; flex: 1 1 auto; height: 1px; background: #e5e7eb; }
 
+/* On the sign-in page (My Account) the block stands in the middle, however wide the theme's content
+   area is and whichever side it starts on: in a wide area it used to sit at the edge the text starts
+   from. Auto margins centre it in a plain block, a flex column and a grid alike; the width keeps it
+   from shrinking to its content in a flex row. The shortcode's block stays where the shop put it. */
+.ocsl-inline.ocsl-account { float: none; clear: both; width: 100%; margin-left: auto; margin-right: auto; }
+.ocsl-account .ocsl-steps .ocsl-h, .ocsl-account .ocsl-sub { text-align: center; }
+
+/* The phone alone (the shop switched "להציג כניסה עם אימייל וסיסמה" off). Without a sign-up form
+   the theme's forms are not printed at all; with one they are, and its sign-in column steps aside
+   so the sign-up form stands under our block, in the middle like it. */
+.ocsl-inline.ocsl-only ~ #customer_login .u-column1,
+.ocsl-inline.ocsl-only ~ .u-columns .u-column1,
+.ocsl-inline.ocsl-only ~ form.woocommerce-form-login,
+.ocsl-inline.ocsl-only ~ * form.woocommerce-form-login { display: none !important; }
+.ocsl-inline.ocsl-only ~ #customer_login .u-column2,
+.ocsl-inline.ocsl-only ~ .u-columns .u-column2 { float: none !important; width: 100% !important; max-width: 460px !important; margin-left: auto !important; margin-right: auto !important; }
+
 /* ---------------- the theme's header login drawer ("שלום, אורח") ----------------
    The script marks the drawer .ocsl-drawer and dresses our block like OC Theme's: a header line, a
    centred title, a full-width field and button, "או" and an email/password door, and the sign-up
@@ -150,6 +170,8 @@ html.ocsl-open { overflow: hidden; }
 /* The drawer keeps 90px on top for its close button: our header line sits beside it instead. */
 #auth-panel.ocsl-drawer:not(.ocsl-reg-open) { padding-top: 20px !important; }
 .ocsl-drawer .ocsl-inline { max-width: none; margin: 0; padding: 0 30px; border: 0; border-radius: 0; background: transparent; }
+/* In the drawer only the phone step's title is centred (below); the rest reads from the right as before. */
+.ocsl-drawer .ocsl-account .ocsl-steps .ocsl-h, .ocsl-drawer .ocsl-account .ocsl-sub { text-align: right; }
 .ocsl-dhead { margin: 0 0 26px; padding: 2px 0 14px 40px; border-bottom: 1px solid #e5e2dd; font-size: 18px; font-weight: 700; color: var(--ocsl-ink); text-align: right; line-height: 1.3; }
 /* Themes lay a coloured ::before/::after over their buttons: none on ours. */
 .ocsl-drawer button.ocsl-door::before, .ocsl-drawer button.ocsl-door::after,

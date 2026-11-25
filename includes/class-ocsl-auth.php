@@ -322,7 +322,11 @@ class OCSL_Auth {
 		if ( email_exists( $email ) ) {
 			// Linking a new number to an existing account by its email would let anyone take that
 			// account over with their own phone. The owner signs in the way the account knows.
-			self::fail( 'האימייל הזה כבר שייך לחשבון קיים. התחברו עם מספר הטלפון ששמור בו, או עם האימייל והסיסמה בעמוד החשבון שלי.' );
+			self::fail(
+				OCSL_Gate::email_login()
+					? 'האימייל הזה כבר שייך לחשבון קיים. התחברו עם מספר הטלפון ששמור בו, או עם האימייל והסיסמה בעמוד החשבון שלי.'
+					: 'האימייל הזה כבר שייך לחשבון קיים. התחברו עם מספר הטלפון ששמור בו. אם המספר הזה כבר לא אצלכם, פנו אלינו ונעזור.' // The shop shows no email and password form to send them to.
+			);
 		}
 		if ( ! OCSL_Sender::available() ) {
 			self::fail( 'הכניסה עם SMS לא זמינה כרגע.', array( 'unavailable' => 1 ) );

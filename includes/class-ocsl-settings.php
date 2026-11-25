@@ -27,6 +27,8 @@ class OCSL_Settings {
 			// Where the phone sign-in is required.
 			'gate'            => 'required', // required | optional | off.
 			'myaccount_form'  => 1,
+			// My Account: WooCommerce's email and password form under the phone sign-in. Off: the phone only.
+			'email_login'     => 1,
 			'open_selectors'  => '',
 
 			// The message.
@@ -70,8 +72,9 @@ class OCSL_Settings {
 			'btn_text_color'  => '',
 			'popup_bg'        => '',
 			'text_color'      => '',
-			'radius'          => 16,     // corners of the popup, px
-			'btn_shape'       => 'soft', // soft | round | square: buttons and fields
+			// The shape of buttons and boxes (windows, fields, buttons): square | soft | round.
+			// "custom" is never chosen: it is the look a shop set before 0.1.6 (see keep_look()).
+			'corners'         => 'square',
 			'overlay'         => 55,     // how dark the page gets behind the popup, %
 
 			// The theme's sign-in drawer ("שלום, אורח" in the header).
@@ -122,6 +125,55 @@ class OCSL_Settings {
 		return 'register' === $v ? 'register' : 'details';
 	}
 
+	/** The three shapes a shop can choose, with the words of the settings screen. */
+	public static function corner_choices() {
+		return array(
+			'square' => 'פינות ישרות',
+			'soft'   => 'מעט מעוגלות',
+			'round'  => 'מעוגלות לגמרי',
+		);
+	}
+
+	/**
+	 * Until 0.1.6 the look was two settings (the popup's corners in px, and the shape of buttons and
+	 * fields), rounded by default. Now it is one choice, square by default. A shop that already ran the
+	 * plugin must not change its look by updating: its old look is written down once, as one of the
+	 * three choices when it matches one exactly, and as "custom" (the old two values, kept as they
+	 * are) when it does not. A new install gets the default.
+	 *
+	 * @return void
+	 */
+	public static function keep_look() {
+		$saved = get_option( self::OPTION, array() );
+		$saved = is_array( $saved ) ? $saved : array();
+		if ( isset( $saved['corners'] ) ) {
+			return;
+		}
+		// A shop that never saved the settings screen still has its licence, or its send log.
+		$ran_before = $saved || false !== get_option( 'ocsl_hub' ) || false !== get_option( 'ocsl_log' );
+		if ( ! $ran_before ) {
+			$saved['corners'] = 'square';
+		} else {
+			$radius = isset( $saved['radius'] ) ? (int) $saved['radius'] : 16;
+			$shape  = isset( $saved['btn_shape'] ) ? (string) $saved['btn_shape'] : 'soft';
+			$known  = array(
+				'0|square' => 'square',
+				'16|soft'  => 'soft',
+				'24|round' => 'round',
+			);
+			$key    = $radius . '|' . $shape;
+			if ( isset( $known[ $key ] ) ) {
+				$saved['corners'] = $known[ $key ];
+			} else {
+				$saved['corners']   = 'custom';
+				$saved['radius']    = $radius;
+				$saved['btn_shape'] = $shape;
+			}
+		}
+		update_option( self::OPTION, $saved, false );
+		self::flush();
+	}
+
 	/** Forget the per-request copy (after a save). */
 	public static function flush() {
 		self::$cache = null;
@@ -160,6 +212,11 @@ class OCSL_Settings {
 				$out[ $k ] = empty( $in[ $k ] ) ? 0 : 1;
 			}
 		}
+		// A hidden "0" travels with this checkbox, so a settings screen left open from an older version
+		// (which has no such field) never switches the email form off by being saved.
+		if ( isset( $in['email_login'] ) ) {
+			$out['email_login'] = empty( $in['email_login'] ) ? 0 : 1;
+		}
 		if ( isset( $in['new_customer'] ) ) {
 			$out['new_customer'] = in_array( $in['new_customer'], array( 'details', 'register' ), true ) ? $in['new_customer'] : 'details';
 		}
@@ -181,7 +238,6 @@ class OCSL_Settings {
 			'ip_hourly'       => array( 1, 100 ),
 			'daily_cap'       => array( 10, 100000 ),
 			'low_balance'     => array( 0, 100000 ),
-			'radius'          => array( 0, 28 ),
 			'overlay'         => array( 0, 90 ),
 		);
 		foreach ( $ints as $k => $range ) {
@@ -205,8 +261,9 @@ class OCSL_Settings {
 				$out[ $k ] = $c ? $c : '';
 			}
 		}
-		if ( isset( $in['btn_shape'] ) ) {
-			$out['btn_shape'] = in_array( $in['btn_shape'], array( 'soft', 'round', 'square' ), true ) ? $in['btn_shape'] : 'soft';
+		// Anything but one of the three choices (the kept "custom" look included) leaves the stored value alone.
+		if ( isset( $in['corners'] ) && is_string( $in['corners'] ) && isset( self::corner_choices()[ $in['corners'] ] ) ) {
+			$out['corners'] = $in['corners'];
 		}
 		return $out;
 	}

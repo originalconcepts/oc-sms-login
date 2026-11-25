@@ -483,7 +483,10 @@
 		var tel = q('[data-ocsl-step="phone"] input[name=phone]', el);
 		if (tel) { tel.setAttribute('placeholder', 'מספר טלפון נייד'); }
 
-		var loginCol = panel.querySelector('#customer_login .u-column1');
+		// The drawer has its own way of keeping the theme's forms closed (the stylesheet's .ocsl-only rules are for a page).
+		el.classList.remove('ocsl-only');
+		// The shop shows the phone alone: no door to the theme's email and password form.
+		var loginCol = D.emailLogin === false ? null : panel.querySelector('#customer_login .u-column1');
 		var oldOr = q('.ocsl-or', el);
 		if (loginCol) {
 			var alt = document.createElement('div');

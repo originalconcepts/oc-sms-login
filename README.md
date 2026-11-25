@@ -48,6 +48,22 @@ The theme's own sign-up form (WooCommerce's, in the header drawer or on My Accou
 it is posted to the same page as the browser would post it, and WooCommerce's errors from the answer
 show above the form's button instead of after a page load.
 
+## The sign-in page and the look
+
+- **My Account**: the phone block stands above WooCommerce's forms, in the middle of the page whatever
+  the theme's content width. `email_login` ("להציג כניסה עם אימייל וסיסמה", on by default) decides
+  whether the "או כניסה עם אימייל וסיסמה" line and the theme's email and password form show under it.
+  Off, the forms between `woocommerce_before_customer_login_form` and
+  `woocommerce_after_customer_login_form` are not printed; where the shop opened registration on that
+  page the sign-up form stays and only the sign-in column is hidden. While a code cannot go out the
+  block is not printed, so the email form always shows then. Staff sign in through the admin's login.
+- **The shape of buttons and boxes**: `corners` ("הצורה של כפתורים ותיבות"): `square` (default),
+  `soft`, `round`, for the popup, the inline block, the fields, the buttons and the close button, as CSS
+  variables (`OCSL_Gate::corners()`). Until 0.1.5 this was two settings (`radius`, `btn_shape`), rounded
+  by default; a shop that ran an earlier version keeps the look it had (`OCSL_Settings::keep_look()`,
+  once): one of the three when it matches exactly, otherwise `custom`, the old two values untouched
+  until the shop picks one of the three.
+
 ## Ways out
 
 | transport | when | how |

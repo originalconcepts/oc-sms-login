@@ -205,7 +205,17 @@ class OCSL_Admin {
 					</tr>
 					<tr>
 						<th scope="row">עמוד "החשבון שלי"</th>
-						<td><label><input type="checkbox" name="<?php echo esc_attr( $f( 'myaccount_form' ) ); ?>" value="1" <?php checked( $s['myaccount_form'] ); ?>> להציג כניסה עם SMS מעל טופס האימייל והסיסמה</label></td>
+						<td><label><input type="checkbox" id="ocsl-myaccount_form" name="<?php echo esc_attr( $f( 'myaccount_form' ) ); ?>" value="1" <?php checked( $s['myaccount_form'] ); ?>> להציג כניסה עם SMS בעמוד הכניסה לחשבון</label></td>
+					</tr>
+					<tr id="ocsl-email_login-row"<?php echo $s['myaccount_form'] ? '' : ' hidden'; ?>>
+						<th scope="row">כניסה עם אימייל וסיסמה</th>
+						<td>
+							<?php // The "0" travels with the checkbox: see OCSL_Settings::sanitize(). ?>
+							<input type="hidden" name="<?php echo esc_attr( $f( 'email_login' ) ); ?>" value="0">
+							<label><input type="checkbox" name="<?php echo esc_attr( $f( 'email_login' ) ); ?>" value="1" <?php checked( $s['email_login'] ); ?>> להציג כניסה עם אימייל וסיסמה</label>
+							<p class="description">מסומן: מתחת לכניסה עם הטלפון מופיעה השורה "או כניסה עם אימייל וסיסמה", ואחריה הטופס הרגיל של האתר. לא מסומן: בעמוד הכניסה מופיעה רק הכניסה עם הטלפון, בלי השורה ובלי הטופס.</p>
+							<p class="description">כדאי לדעת לפני שמכבים: לקוח שבחשבון שלו לא שמור מספר טלפון לא יוכל להיכנס מהעמוד הזה. מנהלי האתר ממשיכים להיכנס מעמוד הכניסה של הניהול, וכשאי אפשר לשלוח קודים (למשל כשיתרת ההודעות נגמרה) הטופס הרגיל חוזר להופיע לבד.</p>
+						</td>
 					</tr>
 					<tr>
 						<th scope="row"><label for="ocsl-sel">פתיחת הכניסה גם מ...</label></th>
@@ -255,7 +265,7 @@ class OCSL_Admin {
 				</table>
 
 				<h2>עיצוב החלון</h2>
-				<p class="description">הצבעים, הפינות והכפתורים של חלון הכניסה, של הכניסה בעמוד החשבון ושל חלון ההתחברות בכותרת. השינויים מופיעים מיד בתצוגה המקדימה.</p>
+				<p class="description">הצבעים והצורה של חלון הכניסה, של הכניסה בעמוד החשבון ושל חלון ההתחברות בכותרת. השינויים מופיעים מיד בתצוגה המקדימה.</p>
 				<div class="ocsl-design">
 					<table class="form-table" role="presentation">
 						<?php
@@ -273,15 +283,20 @@ class OCSL_Admin {
 							</tr>
 						<?php endforeach; ?>
 						<tr>
-							<th scope="row"><label for="ocsl-radius">עיגול פינות החלון</label></th>
-							<td><input id="ocsl-radius" type="range" min="0" max="28" step="1" name="<?php echo esc_attr( $f( 'radius' ) ); ?>" value="<?php echo esc_attr( (string) $s['radius'] ); ?>"> <output for="ocsl-radius"><?php echo esc_html( (string) $s['radius'] ); ?></output> px</td>
-						</tr>
-						<tr>
-							<th scope="row">צורת הכפתורים והשדות</th>
+							<th scope="row">הצורה של כפתורים ותיבות</th>
 							<td>
-								<?php foreach ( array( 'soft' => 'מעוגלים קלות', 'round' => 'עגולים', 'square' => 'ישרים' ) as $v => $label ) : ?>
-									<label style="margin-inline-end:16px"><input type="radio" class="ocsl-shape" name="<?php echo esc_attr( $f( 'btn_shape' ) ); ?>" value="<?php echo esc_attr( $v ); ?>" <?php checked( $s['btn_shape'], $v ); ?>> <?php echo esc_html( $label ); ?></label>
+								<?php
+								$corner_choices = OCSL_Settings::corner_choices();
+								if ( 'custom' === $s['corners'] ) {
+									// A look set before 0.1.6 that is none of the three: kept until the shop picks one.
+									$corner_choices = array( 'custom' => 'כמו עכשיו (העיצוב שנקבע בגרסה הקודמת של התוסף)' ) + $corner_choices;
+								}
+								foreach ( $corner_choices as $v => $label ) :
+									$look = OCSL_Gate::corners( $s, $v );
+									?>
+									<label style="display:block;margin:0 0 6px"><input type="radio" class="ocsl-corners" name="<?php echo esc_attr( $f( 'corners' ) ); ?>" value="<?php echo esc_attr( $v ); ?>" data-look="<?php echo esc_attr( implode( '|', $look ) ); ?>" <?php checked( $s['corners'], $v ); ?>> <?php echo esc_html( $label ); ?></label>
 								<?php endforeach; ?>
+								<p class="description">בחרו מה שמתאים לסגנון האתר. הבחירה חלה על חלון הטלפון שלפני הקופה, על הכניסה בעמוד החשבון, ועל השדות והכפתורים שבהם.</p>
 							</td>
 						</tr>
 						<tr>
@@ -650,7 +665,7 @@ class OCSL_Admin {
 		wp_enqueue_script( 'wp-color-picker' );
 		$css = plugin_dir_path( OCSL_FILE ) . 'assets/css/ocsl.css';
 		wp_enqueue_style( 'ocsl-preview', plugin_dir_url( OCSL_FILE ) . 'assets/css/ocsl.css', array(), OCSL_VERSION . ( file_exists( $css ) ? '.' . filemtime( $css ) : '' ) );
-		wp_add_inline_script( 'wp-color-picker', 'jQuery(function($){var pv=document.getElementById("ocsl-preview");if(!pv){return;}var set=function(v,val){if(val){pv.style.setProperty(v,val);}else{pv.style.removeProperty(v);}};$(".ocsl-color").each(function(){var $i=$(this),v=$i.data("var");$i.wpColorPicker({change:function(e,ui){set(v,ui.color.toString());},clear:function(){set(v,"");}});});var shapes={soft:["10px","10px"],round:["999px","24px"],square:["0px","0px"]};$(".ocsl-shape").on("change",function(){var s=shapes[this.value]||shapes.soft;set("--ocsl-btn-radius",s[0]);set("--ocsl-field-radius",s[1]);});$("#ocsl-radius").on("input",function(){set("--ocsl-radius",this.value+"px");$(this).next("output").text(this.value);});$("#ocsl-overlay").on("input",function(){set("--ocsl-overlay",this.value/100);$(this).next("output").text(this.value);});});' );
+		wp_add_inline_script( 'wp-color-picker', 'jQuery(function($){var pv=document.getElementById("ocsl-preview");if(!pv){return;}var set=function(v,val){if(val){pv.style.setProperty(v,val);}else{pv.style.removeProperty(v);}};$(".ocsl-color").each(function(){var $i=$(this),v=$i.data("var");$i.wpColorPicker({change:function(e,ui){set(v,ui.color.toString());},clear:function(){set(v,"");}});});$(".ocsl-corners").on("change",function(){var l=String(this.getAttribute("data-look")||"").split("|");if(l.length<4){return;}set("--ocsl-radius",l[0]);set("--ocsl-btn-radius",l[1]);set("--ocsl-field-radius",l[2]);set("--ocsl-x-radius",l[3]);});$("#ocsl-myaccount_form").on("change",function(){$("#ocsl-email_login-row").prop("hidden",!this.checked);});$("#ocsl-overlay").on("input",function(){set("--ocsl-overlay",this.value/100);$(this).next("output").text(this.value);});});' );
 	}
 
 	private static function styles() {
