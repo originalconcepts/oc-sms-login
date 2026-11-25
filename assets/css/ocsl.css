@@ -226,3 +226,22 @@ body.ocsl-gated-required .wc-block-checkout { filter: blur(2px); pointer-events:
 
 /* The theme's sign-up form, sent in place: its errors sit above its button. */
 .ocsl-err.ocsl-reg-err { margin: 0 0 12px !important; }
+
+/* Themes recolour every button on hover with long selector chains and !important (OC Theme child:
+   twelve :not()s, an orange text and a sliding orange and white background), which outweigh ours and
+   turned our orange buttons' text orange on hover. An id inside :is() outweighs any chain of classes,
+   in every state; the id need not exist. */
+.ocsl-steps .ocsl-btn:is(.ocsl-btn, #ocsl-w) {
+	color: var(--ocsl-btn-ink) !important;
+	background: var(--ocsl-brand) !important;
+	border-color: transparent !important;
+}
+.ocsl-drawer button.ocsl-door:is(.ocsl-door, #ocsl-w) {
+	color: var(--ocsl-ink) !important;
+	background: transparent !important;
+}
+.ocsl-steps button.ocsl-link:is(.ocsl-link, #ocsl-w),
+.ocsl-dialog button.ocsl-link:is(.ocsl-link, #ocsl-w) {
+	color: var(--ocsl-brand) !important;
+	background: transparent !important;
+}
